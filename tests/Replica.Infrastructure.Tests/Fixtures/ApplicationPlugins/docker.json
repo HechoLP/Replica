@@ -1,0 +1,10 @@
+{
+  "application": "DockerDesktop",
+  "installed": true,
+  "version": "4.43.1",
+  "running": false,
+  "files": {
+    "{AppData}/Docker/settings-store.json": "{\"memoryMiB\":8192,\"cpus\":8,\"wslIntegrations\":{\"Ubuntu\":true},\"registryCredential\":\"TOP_SECRET\",\"kubernetesSecret\":\"TOP_SECRET\"}",
+    "{LocalAppData}/Docker/wsl/data/docker_data.vhdx": "TOP_SECRET"
+  }
+}

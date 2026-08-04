@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <None Include="Fixtures\DeveloperPlugins\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures\ApplicationPlugins\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

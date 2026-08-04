@@ -36,6 +36,11 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         return IsSafeDirectory(path);
     }
 
+    public long? GetFileSize(string path)
+    {
+        return IsSafeFile(path) ? new FileInfo(path).Length : null;
+    }
+
     public async Task<string?> ReadTextFileAsync(
         string path,
         CancellationToken cancellationToken)
@@ -121,6 +126,44 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         }
 
         return files.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public BuiltInApplicationInfo GetApplicationInfo(BuiltInApplication application)
+    {
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string localAppData = GetKnownPath(DeveloperKnownPath.LocalApplicationData);
+        string roamingAppData = GetKnownPath(DeveloperKnownPath.RoamingApplicationData);
+        string? executable = application switch
+        {
+            BuiltInApplication.PowerToys => FirstSafeFile(
+                Path.Combine(localAppData, "PowerToys", "PowerToys.exe"),
+                Path.Combine(programFiles, "PowerToys", "PowerToys.exe")),
+            BuiltInApplication.Everything => FirstSafeFile(
+                Path.Combine(programFiles, "Everything", "Everything.exe"),
+                Path.Combine(localAppData, "Everything", "Everything.exe")),
+            BuiltInApplication.ObsStudio => FirstSafeFile(
+                Path.Combine(programFiles, "obs-studio", "bin", "64bit", "obs64.exe")),
+            BuiltInApplication.Minecraft => FirstSafeFile(
+                Path.Combine(programFiles, "Minecraft Launcher", "MinecraftLauncher.exe"),
+                Path.Combine(
+                    localAppData,
+                    "Microsoft",
+                    "WindowsApps",
+                    "Minecraft.exe")),
+            BuiltInApplication.DockerDesktop => FirstSafeFile(
+                Path.Combine(programFiles, "Docker", "Docker", "Docker Desktop.exe")),
+            BuiltInApplication.AbletonLive => FindAbletonExecutable(programFiles),
+            _ => throw new ArgumentOutOfRangeException(nameof(application), application, null),
+        };
+        bool dataOnlyMinecraft = application == BuiltInApplication.Minecraft &&
+            IsSafeDirectory(Path.Combine(roamingAppData, ".minecraft"));
+        bool installed = executable is not null || dataOnlyMinecraft;
+        string? version = executable is null ? null : TryGetFileVersion(executable);
+        return new BuiltInApplicationInfo(
+            installed,
+            version,
+            IsApplicationRunning(application),
+            executable);
     }
 
     public async Task<DeveloperToolQueryResult> QueryAsync(
@@ -266,6 +309,105 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         }
 
         return null;
+    }
+
+    private static string? FirstSafeFile(params string[] candidates)
+    {
+        return candidates.FirstOrDefault(IsSafeFile);
+    }
+
+    private static string? FindAbletonExecutable(string programFiles)
+    {
+        string root = Path.Combine(programFiles, "Ableton");
+        if (!IsSafeDirectory(root))
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (string directory in Directory
+                         .EnumerateDirectories(root, "Ableton Live *", SearchOption.TopDirectoryOnly)
+                         .Where(IsSafeDirectory)
+                         .OrderByDescending(value => value, StringComparer.OrdinalIgnoreCase))
+            {
+                string? executable = Directory
+                    .EnumerateFiles(
+                        Path.Combine(directory, "Program"),
+                        "Ableton Live*.exe",
+                        SearchOption.TopDirectoryOnly)
+                    .FirstOrDefault(IsSafeFile);
+                if (executable is not null)
+                {
+                    return executable;
+                }
+            }
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
+    }
+
+    private static string? TryGetFileVersion(string path)
+    {
+        try
+        {
+            FileVersionInfo version = FileVersionInfo.GetVersionInfo(path);
+            return version.ProductVersion ?? version.FileVersion;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsApplicationRunning(BuiltInApplication application)
+    {
+        string[] names = application switch
+        {
+            BuiltInApplication.PowerToys => ["PowerToys"],
+            BuiltInApplication.Everything => ["Everything"],
+            BuiltInApplication.ObsStudio => ["obs64", "obs32"],
+            BuiltInApplication.Minecraft => ["Minecraft", "MinecraftLauncher"],
+            BuiltInApplication.DockerDesktop => ["Docker Desktop"],
+            BuiltInApplication.AbletonLive => ["Ableton Live"],
+            _ => throw new ArgumentOutOfRangeException(nameof(application), application, null),
+        };
+
+        Process[] processes = Process.GetProcesses();
+        try
+        {
+            foreach (Process process in processes)
+            {
+                try
+                {
+                    if (names.Any(name => process.ProcessName.StartsWith(
+                            name,
+                            StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception exception) when (
+                    exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // A process can exit or become inaccessible while the read-only inventory runs.
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            foreach (Process process in processes)
+            {
+                process.Dispose();
+            }
+        }
     }
 
     private static async Task<string> ReadBoundedAsync(StreamReader reader)

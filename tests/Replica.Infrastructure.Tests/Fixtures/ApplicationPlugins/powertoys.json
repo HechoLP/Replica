@@ -1,0 +1,16 @@
+{
+  "application": "PowerToys",
+  "installed": true,
+  "version": "0.90.1",
+  "running": false,
+  "files": {
+    "{LocalAppData}/Microsoft/PowerToys/settings.json": "{\"startup\":true,\"theme\":\"dark\",\"apiToken\":\"TOP_SECRET\"}",
+    "{LocalAppData}/Microsoft/PowerToys/FancyZones/settings.json": "{\"fancyzones_shiftDrag\":true}",
+    "{LocalAppData}/Microsoft/PowerToys/FancyZones/custom-layouts.json": "{\"custom-layouts\":[]}",
+    "{LocalAppData}/Microsoft/PowerToys/FancyZones/app-zone-history.json": "{\"app-zone-history\":[]}",
+    "{LocalAppData}/Microsoft/PowerToys/Keyboard Manager/default.json": "{\"remapKeys\":[{\"originalKeys\":\"CapsLock\",\"newRemapKeys\":\"Ctrl\"}]}",
+    "{LocalAppData}/Microsoft/PowerToys/PowerRename/settings.json": "{\"MRUEnabled\":true}",
+    "{LocalAppData}/Microsoft/PowerToys/AlwaysOnTop/settings.json": "{\"hotkey\":{\"code\":84}}",
+    "{LocalAppData}/Microsoft/PowerToys/Awake/settings.json": "{\"mode\":0}"
+  }
+}

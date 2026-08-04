@@ -14,6 +14,12 @@ public static class BuiltInPluginCatalog
             new WindowsTerminalPlugin(),
             new NodeJsPlugin(),
             new PythonPlugin(),
+            new PowerToysPlugin(),
+            new EverythingPlugin(),
+            new ObsStudioPlugin(),
+            new MinecraftPlugin(),
+            new DockerDesktopPlugin(),
+            new AbletonLivePlugin(),
         ];
     }
 }
