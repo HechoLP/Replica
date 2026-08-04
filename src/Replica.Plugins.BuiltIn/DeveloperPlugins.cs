@@ -11,7 +11,7 @@ public sealed class VisualStudioCodePlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "Visual Studio Code";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.VisualStudioCodeVersion;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.VisualStudioCodeVersion;
 
     public override async Task<IReadOnlyList<PluginRestoreAction>> BuildRestoreActionsAsync(
         PluginComparisonResult comparison,
@@ -161,7 +161,7 @@ public sealed class GitPlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "Git";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.GitVersion;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.GitVersion;
 
     public override async Task<PluginSnapshot> CaptureAsync(
         PluginCaptureContext context,
@@ -231,7 +231,7 @@ public sealed class PowerShellPlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "PowerShell";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.PowerShellVersion;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.PowerShellVersion;
 
     public override async Task<PluginSnapshot> CaptureAsync(
         PluginCaptureContext context,
@@ -293,7 +293,7 @@ public sealed class WindowsTerminalPlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "Windows Terminal";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.PowerShellVersion;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.PowerShellVersion;
 
     public override async Task<PluginDetectionResult> DetectAsync(
         PluginCaptureContext context,
@@ -417,7 +417,7 @@ public sealed class NodeJsPlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "Node.js";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.NodeVersion;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.NodeVersion;
 
     public override async Task<PluginSnapshot> CaptureAsync(
         PluginCaptureContext context,
@@ -479,7 +479,7 @@ public sealed class PythonPlugin : BuiltInDeveloperPluginBase
 
     public override string DisplayName => "Python";
 
-    protected override DeveloperToolQuery DetectionQuery => DeveloperToolQuery.PythonInterpreters;
+    protected override DeveloperToolQuery? DetectionQuery => DeveloperToolQuery.PythonInterpreters;
 
     public override async Task<PluginSnapshot> CaptureAsync(
         PluginCaptureContext context,

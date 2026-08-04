@@ -21,6 +21,12 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
         "oauth",
         "bearer",
         "cookie",
+        "streamKey",
+        "stream_key",
+        "stream key",
+        "license",
+        "serialNumber",
+        "activationCode",
         "connectionString",
         "privateKey",
     ];
@@ -31,15 +37,20 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
 
     public virtual string Version => "1.0.0";
 
-    protected abstract DeveloperToolQuery DetectionQuery { get; }
+    protected virtual DeveloperToolQuery? DetectionQuery => null;
 
     public virtual async Task<PluginDetectionResult> DetectAsync(
         PluginCaptureContext context,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        if (DetectionQuery is not DeveloperToolQuery query)
+        {
+            return new PluginDetectionResult(false, null, ["No detection query is configured."]);
+        }
+
         DeveloperToolQueryResult result = await context.Host
-            .QueryAsync(DetectionQuery, cancellationToken)
+            .QueryAsync(query, cancellationToken)
             .ConfigureAwait(false);
         return new PluginDetectionResult(
             result.IsAvailable,
@@ -98,7 +109,7 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
                 true);
         }
 
-        return Task.FromResult(new PluginComparisonResult(Id, differences));
+        return Task.FromResult(new PluginComparisonResult(Id, differences, target.Warnings));
     }
 
     public virtual Task<IReadOnlyList<PluginRestoreAction>> BuildRestoreActionsAsync(

@@ -1,0 +1,10 @@
+{
+  "application": "Everything",
+  "installed": true,
+  "version": "1.4.1.1026",
+  "running": false,
+  "files": {
+    "{AppData}/Everything/Everything.ini": "search_match_case=0\nsearch_match_path=1\nview=details\nwindow_x=20\nindex_size=1\nexclude_list=C:\\\\Private;D:\\\\Build\nsearch_token=TOP_SECRET\ndb_location=C:\\\\Index\n",
+    "{AppData}/Everything/Everything.db": "TOP_SECRET"
+  }
+}

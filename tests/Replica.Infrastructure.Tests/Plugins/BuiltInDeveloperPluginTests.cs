@@ -278,8 +278,8 @@ public sealed class BuiltInDeveloperPluginTests
     {
         IReadOnlyList<IBuiltInPlugin> plugins = BuiltInPluginCatalog.CreateDefault();
 
-        Assert.Equal(6, plugins.Count);
-        Assert.Equal(6, plugins.Select(plugin => plugin.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(12, plugins.Count);
+        Assert.Equal(12, plugins.Select(plugin => plugin.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.All(plugins, plugin => Assert.Equal("1.0.0", plugin.Version));
     }
 
@@ -375,6 +375,9 @@ public sealed class BuiltInDeveloperPluginTests
                 _files.Keys.Any(file => file.StartsWith($"{normalized}/", StringComparison.OrdinalIgnoreCase));
         }
 
+        public long? GetFileSize(string path) =>
+            _files.TryGetValue(Normalize(path), out string? content) ? content.Length : null;
+
         public Task<string?> ReadTextFileAsync(string path, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -398,6 +401,9 @@ public sealed class BuiltInDeveloperPluginTests
                 .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
+
+        public BuiltInApplicationInfo GetApplicationInfo(BuiltInApplication application) =>
+            new(false, null, false);
 
         public Task<DeveloperToolQueryResult> QueryAsync(
             DeveloperToolQuery query,

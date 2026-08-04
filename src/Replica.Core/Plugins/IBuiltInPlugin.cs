@@ -62,6 +62,22 @@ public enum DeveloperToolQuery
     PythonPackages,
 }
 
+public enum BuiltInApplication
+{
+    PowerToys,
+    Everything,
+    ObsStudio,
+    Minecraft,
+    DockerDesktop,
+    AbletonLive,
+}
+
+public sealed record BuiltInApplicationInfo(
+    bool IsInstalled,
+    string? Version,
+    bool IsRunning,
+    string? ExecutablePath = null);
+
 public interface IDeveloperPluginHost
 {
     string GetKnownPath(DeveloperKnownPath path);
@@ -70,9 +86,13 @@ public interface IDeveloperPluginHost
 
     bool DirectoryExists(string path);
 
+    long? GetFileSize(string path);
+
     Task<string?> ReadTextFileAsync(string path, CancellationToken cancellationToken);
 
     IReadOnlyList<string> EnumerateFiles(string path, string searchPattern, bool recursive);
+
+    BuiltInApplicationInfo GetApplicationInfo(BuiltInApplication application);
 
     Task<DeveloperToolQueryResult> QueryAsync(
         DeveloperToolQuery query,
@@ -81,7 +101,8 @@ public interface IDeveloperPluginHost
 
 public sealed record PluginCaptureContext(
     IDeveloperPluginHost Host,
-    bool IncludeSshPublicKeyFingerprints = false);
+    bool IncludeSshPublicKeyFingerprints = false,
+    IReadOnlyList<string>? SelectedRecoveryPaths = null);
 
 public sealed record DeveloperToolQueryResult(
     bool IsAvailable,
@@ -143,7 +164,8 @@ public sealed record PluginDifference(
 
 public sealed record PluginComparisonResult(
     string PluginId,
-    IReadOnlyList<PluginDifference> Differences);
+    IReadOnlyList<PluginDifference> Differences,
+    IReadOnlyList<string>? Warnings = null);
 
 public sealed record PluginRestoreAction(
     string Id,

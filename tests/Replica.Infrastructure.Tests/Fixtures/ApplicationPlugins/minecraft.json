@@ -1,0 +1,17 @@
+{
+  "application": "Minecraft",
+  "installed": true,
+  "version": "1.21.5",
+  "running": false,
+  "files": {
+    "{AppData}/.minecraft/options.txt": "fov:0.0\nguiScale:3\naccessToken:TOP_SECRET\n",
+    "{AppData}/.minecraft/resourcepacks/ReplicaPack.zip": "TOP_SECRET",
+    "{AppData}/.minecraft/shaderpacks/ReplicaShader.zip": "TOP_SECRET",
+    "{AppData}/.minecraft/mods/example-mod-1.2.3.jar": "TOP_SECRET",
+    "{AppData}/.minecraft/config/example.json": "{\"enabled\":true,\"serviceToken\":\"TOP_SECRET\"}",
+    "{AppData}/.minecraft/config/example.toml": "quality = 3\npassword = TOP_SECRET\n",
+    "{AppData}/.minecraft/saves/Replica World/level.dat": "TOP_SECRET",
+    "{AppData}/.minecraft/screenshots/shot.png": "TOP_SECRET",
+    "{AppData}/.minecraft/logs/latest.log": "TOP_SECRET"
+  }
+}
