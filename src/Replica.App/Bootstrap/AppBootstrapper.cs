@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Replica.App.Services;
 using Replica.App.ViewModels;
+using Replica.Core.Matching;
 using Replica.Core.Models;
 using Replica.Core.Plugins;
 using Replica.Core.Services;
@@ -50,6 +51,10 @@ public static class AppBootstrapper
         }
 
         services.AddSingleton<IEnvironmentScanner, EnvironmentScanner>();
+        services.AddSingleton<IApplicationIdentityNormalizer, ApplicationIdentityNormalizer>();
+        services.AddSingleton<IApplicationMatcher, ApplicationMatcher>();
+        services.AddSingleton<IApplicationVersionComparer, ApplicationVersionComparer>();
+        services.AddSingleton<IApplicationAutomationPolicy, ApplicationAutomationPolicy>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
