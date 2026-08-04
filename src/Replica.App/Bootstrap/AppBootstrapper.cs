@@ -3,11 +3,14 @@ using Microsoft.Extensions.Logging;
 using Replica.App.Services;
 using Replica.App.ViewModels;
 using Replica.Core.Models;
+using Replica.Core.Plugins;
 using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
 using Replica.Infrastructure.Paths;
+using Replica.Infrastructure.Scanning;
 using Replica.Infrastructure.Snapshots;
 using Replica.Infrastructure.Updates;
+using Replica.Plugins.BuiltIn;
 
 namespace Replica.App.Bootstrap;
 
@@ -30,6 +33,23 @@ public static class AppBootstrapper
         services.AddSingleton<ISnapshotSelectionEstimator, SnapshotSelectionEstimator>();
         services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
         services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
+        services.AddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddSingleton<IWinGetScanner, WinGetScanner>();
+        services.AddSingleton<IRegistryApplicationSource, WindowsRegistryApplicationSource>();
+        services.AddSingleton<IRegistryApplicationScanner, RegistryApplicationScanner>();
+        services.AddSingleton<IMsixApplicationScanner, MsixApplicationScanner>();
+        services.AddSingleton<IApplicationScanner, ApplicationScanner>();
+        services.AddSingleton<IEnvironmentValueSource, WindowsEnvironmentValueSource>();
+        services.AddSingleton<IEnvironmentVariableScanner, EnvironmentVariableScanner>();
+        services.AddSingleton<IFontInventorySource, WindowsFontInventorySource>();
+        services.AddSingleton<IFontScanner, FontScanner>();
+        services.AddSingleton<IWindowsInfoScanner, WindowsInfoScanner>();
+        foreach (IBuiltInPlugin plugin in BuiltInPluginCatalog.CreateDefault())
+        {
+            services.AddSingleton(plugin);
+        }
+
+        services.AddSingleton<IEnvironmentScanner, EnvironmentScanner>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
