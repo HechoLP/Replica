@@ -6,13 +6,14 @@ public static class BuiltInPluginCatalog
 {
     public static IReadOnlyList<IBuiltInPlugin> CreateDefault()
     {
-        return [new FoundationPlugin()];
-    }
-
-    private sealed class FoundationPlugin : IBuiltInPlugin
-    {
-        public string Id => "replica.foundation";
-
-        public string DisplayName => "Replica built-in foundation";
+        return
+        [
+            new VisualStudioCodePlugin(),
+            new GitPlugin(),
+            new PowerShellPlugin(),
+            new WindowsTerminalPlugin(),
+            new NodeJsPlugin(),
+            new PythonPlugin(),
+        ];
     }
 }

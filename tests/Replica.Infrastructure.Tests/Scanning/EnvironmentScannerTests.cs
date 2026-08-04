@@ -117,5 +117,33 @@ public sealed class EnvironmentScannerTests
         public string Id => "test.plugin";
 
         public string DisplayName => "Test plugin";
+
+        public string Version => "1.0.0";
+
+        public Task<PluginDetectionResult> DetectAsync(
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PluginSnapshot> CaptureAsync(
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PluginComparisonResult> CompareAsync(
+            PluginSnapshot source,
+            PluginSnapshot target,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PluginRestoreAction>> BuildRestoreActionsAsync(
+            PluginComparisonResult comparison,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PluginValidationResult> ValidateAsync(
+            PluginSnapshot expected,
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PluginSensitiveExclusion>> GetSensitiveExclusionsAsync(
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

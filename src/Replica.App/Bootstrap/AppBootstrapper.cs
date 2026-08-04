@@ -40,6 +40,7 @@ public static class AppBootstrapper
         services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
         services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
         services.AddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddSingleton<IDeveloperPluginHost, WindowsDeveloperPluginHost>();
         services.AddSingleton<IWinGetScanner, WinGetScanner>();
         services.AddSingleton<IRegistryApplicationSource, WindowsRegistryApplicationSource>();
         services.AddSingleton<IRegistryApplicationScanner, RegistryApplicationScanner>();

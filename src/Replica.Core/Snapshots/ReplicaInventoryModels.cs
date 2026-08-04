@@ -54,7 +54,15 @@ public sealed record ReplicaPluginSnapshot(
     string PluginId,
     string PluginVersion,
     IReadOnlyList<string> Capabilities,
-    IReadOnlyList<ReplicaArtifact> Artifacts);
+    IReadOnlyList<ReplicaArtifact> Artifacts,
+    IReadOnlyDictionary<string, string>? Values = null,
+    IReadOnlyList<ReplicaPluginFile>? Files = null,
+    IReadOnlyList<ReplicaExclusion>? Exclusions = null);
+
+public sealed record ReplicaPluginFile(
+    string LogicalPath,
+    string Content,
+    string ContentType);
 
 public sealed record ReplicaArtifact(
     string ArchivePath,

@@ -400,8 +400,22 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
             fonts.Any(font => font is null) ||
             plugins.Any(plugin =>
                 plugin is null ||
+                string.IsNullOrWhiteSpace(plugin.PluginId) ||
+                string.IsNullOrWhiteSpace(plugin.PluginVersion) ||
                 plugin.Capabilities is null ||
-                plugin.Artifacts is null))
+                plugin.Artifacts is null ||
+                plugin.Values is null && plugin.Files is not null ||
+                plugin.Values?.Keys.Any(string.IsNullOrWhiteSpace) == true ||
+                plugin.Files?.Where(file => file is not null)
+                    .Select(file => file.LogicalPath)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Count() != plugin.Files?.Count ||
+                plugin.Files?.Any(file =>
+                    file is null ||
+                    string.IsNullOrWhiteSpace(file.LogicalPath) ||
+                    Path.IsPathRooted(file.LogicalPath) ||
+                    file.LogicalPath.Split('/', '\\').Contains("..", StringComparer.Ordinal)) == true) ||
+            plugins.Select(plugin => plugin.PluginId).Distinct(
+                StringComparer.Ordinal).Count() != plugins.Count)
         {
             throw new ReplicaSnapshotException("Snapshot inventory metadata is invalid.");
         }

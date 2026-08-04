@@ -1,0 +1,10 @@
+{
+  "queries": {
+    "PythonInterpreters": " -V:3.13 * C:/Python313/python.exe\n -V:3.12 C:/Python312/python.exe",
+    "PythonPackages": "[{\"Interpreter\":\"C:/Python313/python.exe\",\"Packages\":[{\"name\":\"pip\",\"version\":\"25.1.1\"},{\"name\":\"pytest\",\"version\":\"8.4.0\"}]},{\"Interpreter\":\"C:/Python312/python.exe\",\"Packages\":[{\"name\":\"pip\",\"version\":\"24.3.1\"}]}]"
+  },
+  "files": {
+    "{UserProfile}/.virtualenvs/api/pyvenv.cfg": "home = C:/Python313\nversion = 3.13.5",
+    "{UserProfile}/.virtualenvs/api/Lib/site-packages/private.txt": "TOP_SECRET"
+  }
+}
