@@ -1,4 +1,5 @@
 using Replica.Core.Diffing;
+using Replica.Core.Matching;
 
 namespace Replica.Core.Planning;
 
@@ -55,7 +56,8 @@ public sealed record RestoreAction(
     bool IsManualOnly,
     DiffArea SourceArea,
     string SourceDiffKey,
-    string ReasonCode);
+    string ReasonCode,
+    ApplicationMatchConfidence? MatchConfidence = null);
 
 public sealed record RestoreActionReference(DiffArea Area, string DiffKey);
 

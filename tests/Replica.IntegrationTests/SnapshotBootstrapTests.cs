@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Replica.App.Bootstrap;
 using Replica.App.ViewModels;
+using Replica.Core.Execution;
 using Replica.Core.Planning;
 using Replica.Core.Services;
+using Replica.Infrastructure.Restore;
 using Replica.Infrastructure.Snapshots;
 
 namespace Replica.IntegrationTests;
@@ -55,5 +57,22 @@ public sealed class SnapshotBootstrapTests
         Assert.NotNull(services.GetRequiredService<DiffViewerViewModel>());
         Assert.IsType<RestorePlanner>(services.GetRequiredService<IRestorePlanner>());
         Assert.NotNull(services.GetRequiredService<RestoreDryRunViewModel>());
+    }
+
+    [Fact]
+    public void RestoreExecutionServicesResolveFromApplicationBootstrapper()
+    {
+        using ServiceProvider services = AppBootstrapper.BuildServices();
+
+        Assert.IsType<RestoreExecutor>(services.GetRequiredService<IRestoreExecutor>());
+        Assert.NotNull(services.GetRequiredService<IEnumerable<IRestoreActionHandler>>());
+        Assert.IsType<WinGetInstaller>(services.GetRequiredService<IWinGetInstaller>());
+        Assert.IsType<EnvironmentWriter>(services.GetRequiredService<IEnvironmentWriter>());
+        Assert.IsType<RegistryWriter>(services.GetRequiredService<IRegistryWriter>());
+        Assert.IsType<FileRestoreService>(services.GetRequiredService<IFileRestoreService>());
+        Assert.IsType<ElevationService>(services.GetRequiredService<IElevationService>());
+        Assert.IsType<ElevatedPlanStore>(services.GetRequiredService<IElevatedPlanStore>());
+        Assert.IsType<ElevatedExecutorHost>(services.GetRequiredService<IElevatedExecutorHost>());
+        Assert.NotNull(services.GetRequiredService<IRestoreProgressReporter>());
     }
 }
