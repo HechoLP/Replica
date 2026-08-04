@@ -152,6 +152,91 @@
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="12">
+                    <StackPanel DataContext="{Binding RestoreDryRun}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Text="Restore Plan Dry Run" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Text="{Binding StatusText}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Margin="0,0,8,0"
+                                        Padding="14,8"
+                                        Command="{Binding RejectPlanCommand}"
+                                        Content="계획 취소"
+                                        IsEnabled="{Binding CanReview}" />
+                                <Button Padding="14,8"
+                                        Command="{Binding ConfirmPlanCommand}"
+                                        Content="계획 확인 완료"
+                                        IsEnabled="{Binding CanReview}" />
+                            </StackPanel>
+                        </Grid>
+                        <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding Summary}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,10,10"
+                                            Padding="12,8"
+                                            Background="{DynamicResource WindowBackgroundBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12" Text="{Binding Name}" />
+                                            <TextBlock Margin="0,3,0,0"
+                                                       FontSize="17"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       Text="{Binding Value}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <DataGrid MaxHeight="360"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding Actions}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="120" Header="작업" Binding="{Binding Type}" />
+                                <DataGridTextColumn Width="150" Header="이름" Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="180" Header="설명" Binding="{Binding Description}" />
+                                <DataGridTextColumn Width="110" Header="원본" Binding="{Binding OriginalValue}" />
+                                <DataGridTextColumn Width="110" Header="현재" Binding="{Binding CurrentValue}" />
+                                <DataGridTextColumn Width="110" Header="목표" Binding="{Binding TargetValue}" />
+                                <DataGridTextColumn Width="70" Header="위험도" Binding="{Binding Risk}" />
+                                <DataGridTextColumn Width="70" Header="관리자" Binding="{Binding Administrator}" />
+                                <DataGridTextColumn Width="70" Header="재부팅" Binding="{Binding Restart}" />
+                                <DataGridTextColumn Width="70" Header="롤백" Binding="{Binding Rollback}" />
+                                <DataGridTextColumn Width="70" Header="의존" Binding="{Binding DependencyCount}" />
+                                <DataGridTextColumn Width="80" Header="예상 시간" Binding="{Binding EstimatedDuration}" />
+                                <DataGridTextColumn Width="95" Header="다운로드" Binding="{Binding EstimatedDownload}" />
+                                <DataGridTextColumn Width="70" Header="선택" Binding="{Binding Selection}" />
+                                <DataGridTextColumn Width="90" Header="처리" Binding="{Binding Handling}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
                     <StackPanel DataContext="{Binding DiffViewer}">
                         <TextBlock FontSize="20"
                                    FontWeight="SemiBold"

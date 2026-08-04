@@ -5,6 +5,7 @@ using Replica.App.ViewModels;
 using Replica.Core.Diffing;
 using Replica.Core.Matching;
 using Replica.Core.Models;
+using Replica.Core.Planning;
 using Replica.Core.Plugins;
 using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
@@ -57,6 +58,7 @@ public static class AppBootstrapper
         services.AddSingleton<IApplicationVersionComparer, ApplicationVersionComparer>();
         services.AddSingleton<IApplicationAutomationPolicy, ApplicationAutomationPolicy>();
         services.AddSingleton<IEnvironmentDiffEngine, EnvironmentDiffEngine>();
+        services.AddSingleton<IRestorePlanner, RestorePlanner>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
@@ -66,6 +68,7 @@ public static class AppBootstrapper
 
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<DiffViewerViewModel>();
+        services.AddSingleton<RestoreDryRunViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(
