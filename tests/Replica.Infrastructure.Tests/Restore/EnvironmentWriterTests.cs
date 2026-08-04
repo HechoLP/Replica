@@ -115,7 +115,7 @@ public sealed class EnvironmentWriterTests
 
         public string? Get(string name, EnvironmentVariableScope scope) => Value;
 
-        public void Set(string name, string value, EnvironmentVariableScope scope)
+        public void Set(string name, string? value, EnvironmentVariableScope scope)
         {
             Value = value;
             SetCount++;

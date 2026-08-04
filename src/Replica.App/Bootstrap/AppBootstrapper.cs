@@ -70,7 +70,11 @@ public static class AppBootstrapper
         services.AddSingleton<IRegistryWriter, RegistryWriter>();
         services.AddSingleton<IFileRestoreService, FileRestoreService>();
         services.AddSingleton<IWinGetInstaller, WinGetInstaller>();
-        services.AddSingleton<IRestoreJournal, FileRestoreJournal>();
+        services.AddSingleton<RollbackJournalService>();
+        services.AddSingleton<IRestoreJournal>(provider =>
+            provider.GetRequiredService<RollbackJournalService>());
+        services.AddSingleton<IRollbackService>(provider =>
+            provider.GetRequiredService<RollbackJournalService>());
         services.AddSingleton<IRestoreProgressReporter, NullRestoreProgressReporter>();
         services.AddSingleton<IElevatedPlanStore, ElevatedPlanStore>();
         services.AddSingleton<IElevatedProcessLauncher, ElevatedProcessLauncher>();
@@ -92,6 +96,7 @@ public static class AppBootstrapper
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<DiffViewerViewModel>();
         services.AddSingleton<RestoreDryRunViewModel>();
+        services.AddSingleton<RollbackViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(

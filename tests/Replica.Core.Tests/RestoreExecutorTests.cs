@@ -1,6 +1,7 @@
 using Replica.Core.Diffing;
 using Replica.Core.Execution;
 using Replica.Core.Planning;
+using Replica.Core.Rollback;
 using Replica.Core.Services;
 
 namespace Replica.Core.Tests;
@@ -179,6 +180,13 @@ public sealed class RestoreExecutorTests
             ActionIds.Add(entry.ActionId);
             return Task.CompletedTask;
         }
+
+        public Task MarkActionStateAsync(
+            string sessionId,
+            string actionId,
+            RollbackJournalState state,
+            string? mutationTargetPath,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class FakeContext(IRestoreJournal journal, bool isElevated = false) : IRestoreExecutionContext

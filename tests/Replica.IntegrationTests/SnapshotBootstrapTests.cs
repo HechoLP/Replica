@@ -74,5 +74,7 @@ public sealed class SnapshotBootstrapTests
         Assert.IsType<ElevatedPlanStore>(services.GetRequiredService<IElevatedPlanStore>());
         Assert.IsType<ElevatedExecutorHost>(services.GetRequiredService<IElevatedExecutorHost>());
         Assert.NotNull(services.GetRequiredService<IRestoreProgressReporter>());
+        Assert.IsType<RollbackJournalService>(services.GetRequiredService<IRollbackService>());
+        Assert.NotNull(services.GetRequiredService<RollbackViewModel>());
     }
 }

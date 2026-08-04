@@ -152,6 +152,100 @@
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="12">
+                    <StackPanel DataContext="{Binding Rollback}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Text="롤백" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Text="Replica가 변경한 항목만 Journal 검증 후 되돌립니다." />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Padding="14,8"
+                                    Command="{Binding RefreshSessionsCommand}"
+                                    Content="최근 복원 세션" />
+                        </Grid>
+                        <ListBox Margin="0,14,0,0"
+                                 MaxHeight="120"
+                                 ItemsSource="{Binding Sessions}"
+                                 SelectedItem="{Binding SelectedSession}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="4">
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding SessionId}" />
+                                        <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
+                                            <Run Text="{Binding UpdatedAt}" />
+                                            <Run Text=" · " />
+                                            <Run Text="{Binding State}" />
+                                            <Run Text=" · 자동 " />
+                                            <Run Text="{Binding AutomaticCount}" />
+                                            <Run Text=" · 수동 " />
+                                            <Run Text="{Binding ManualCount}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                            <Button Padding="14,8"
+                                    Command="{Binding PreviewRollbackCommand}"
+                                    Content="롤백 미리보기" />
+                            <Button Margin="8,0,0,0"
+                                    Padding="14,8"
+                                    Command="{Binding ApproveRollbackCommand}"
+                                    Content="롤백 계획 승인" />
+                            <Button Margin="8,0,0,0"
+                                    Padding="14,8"
+                                    Command="{Binding ExecuteRollbackCommand}"
+                                    Content="롤백 실행" />
+                        </StackPanel>
+                        <TextBlock Margin="0,10,0,0"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding StatusText}"
+                                   TextWrapping="Wrap" />
+                        <DataGrid Margin="0,12,0,0"
+                                  MaxHeight="260"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding Items}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="160" Header="변경 항목" Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="95" Header="유형" Binding="{Binding Kind}" />
+                                <DataGridTextColumn Width="90" Header="상태" Binding="{Binding State}" />
+                                <DataGridTextColumn Width="90" Header="자동 롤백" Binding="{Binding Automatic}" />
+                                <DataGridTextColumn Width="80" Header="관리자" Binding="{Binding Administrator}" />
+                                <DataGridTextColumn Width="80" Header="선택" Binding="{Binding Selection}" />
+                                <DataGridTextColumn Width="*" Header="수동 조치" Binding="{Binding ManualInstruction}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding Results}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap">
+                                        <Run FontWeight="SemiBold" Text="{Binding State}" />
+                                        <Run Text=" — " />
+                                        <Run Text="{Binding Message}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
                     <StackPanel DataContext="{Binding RestoreDryRun}">
                         <Grid>
                             <Grid.ColumnDefinitions>

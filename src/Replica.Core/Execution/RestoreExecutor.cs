@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
 using Replica.Core.Planning;
+using Replica.Core.Rollback;
 using Replica.Core.Services;
 
 namespace Replica.Core.Execution;
@@ -120,8 +119,10 @@ public sealed class RestoreExecutor : IRestoreExecutor
                         action.Id,
                         action.Type,
                         DateTimeOffset.UtcNow,
-                        HashValue(action.CurrentValue),
-                        "BeforeMutation"),
+                        null,
+                        "BeforeMutation",
+                        action,
+                        context.GetFileRestoreRequest(action.Id)),
                     cancellationToken).ConfigureAwait(false);
             }
 
@@ -140,13 +141,29 @@ public sealed class RestoreExecutor : IRestoreExecutor
                 action,
                 context,
                 cancellationToken).ConfigureAwait(false);
-            return result.ActionId.Equals(action.Id, StringComparison.Ordinal)
-                ? result
-                : Result(
+            if (!result.ActionId.Equals(action.Id, StringComparison.Ordinal))
+            {
+                RestoreActionExecutionResult mismatch = Result(
                     action,
                     RestoreExecutionState.Failed,
                     "HandlerResultMismatch",
                     "The action handler returned an invalid result.");
+                if (IsMutation(action.Type))
+                {
+                    await UpdateJournalStateAsync(context, action, mismatch, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                return mismatch;
+            }
+
+            if (IsMutation(action.Type))
+            {
+                await UpdateJournalStateAsync(context, action, result, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -159,6 +176,38 @@ public sealed class RestoreExecutor : IRestoreExecutor
                 RestoreExecutionState.Failed,
                 "ActionExecutionFailed",
                 "The restore action failed without exposing system or payload details.");
+        }
+    }
+
+    private static async Task UpdateJournalStateAsync(
+        IRestoreExecutionContext context,
+        RestoreAction action,
+        RestoreActionExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        RollbackJournalState state = result.State switch
+        {
+            RestoreExecutionState.Succeeded or RestoreExecutionState.RequiresRestart =>
+                RollbackJournalState.Applied,
+            RestoreExecutionState.Skipped => RollbackJournalState.Verified,
+            RestoreExecutionState.Failed or RestoreExecutionState.Cancelled =>
+                RollbackJournalState.RollbackPending,
+            _ => RollbackJournalState.Applied,
+        };
+        await context.Journal.MarkActionStateAsync(
+            context.SessionId,
+            action.Id,
+            state,
+            result.MutationTargetPath,
+            cancellationToken).ConfigureAwait(false);
+        if (state == RollbackJournalState.Applied)
+        {
+            await context.Journal.MarkActionStateAsync(
+                context.SessionId,
+                action.Id,
+                RollbackJournalState.Verified,
+                result.MutationTargetPath,
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -236,13 +285,6 @@ public sealed class RestoreExecutor : IRestoreExecutor
             results.Add(result);
             resultById[action.Id] = result;
         }
-    }
-
-    private static string? HashValue(string? value)
-    {
-        return value is null
-            ? null
-            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
     private static RestoreActionExecutionResult Result(
