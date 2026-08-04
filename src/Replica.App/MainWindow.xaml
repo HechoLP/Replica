@@ -152,6 +152,70 @@
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="12">
+                    <StackPanel DataContext="{Binding DiffViewer}">
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding OverallScoreText}" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding CoverageText}" />
+                        <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding CategoryScores}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,10,10"
+                                            Padding="12,8"
+                                            Background="{DynamicResource WindowBackgroundBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12" Text="{Binding Name}" />
+                                            <TextBlock Margin="0,3,0,0"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       Text="{Binding Score}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Margin="0,4,0,10"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding StatusText}" />
+                        <DataGrid MaxHeight="320"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding Items}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="95" Header="유형" Binding="{Binding Type}" />
+                                <DataGridTextColumn Width="95" Header="영역" Binding="{Binding Area}" />
+                                <DataGridTextColumn Width="160" Header="항목" Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="120" Header="Snapshot" Binding="{Binding Source}" />
+                                <DataGridTextColumn Width="120" Header="현재 PC" Binding="{Binding Target}" />
+                                <DataGridTextColumn Width="110" Header="자동 복원" Binding="{Binding AutomaticRestore}" />
+                                <DataGridTextColumn Width="70" Header="위험도" Binding="{Binding Risk}" />
+                                <DataGridTextColumn Width="70" Header="관리자" Binding="{Binding Administrator}" />
+                                <DataGridTextColumn Width="70" Header="재부팅" Binding="{Binding Restart}" />
+                                <DataGridTextColumn Width="70" Header="일치율" Binding="{Binding Similarity}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed" />

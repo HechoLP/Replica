@@ -300,7 +300,9 @@ public sealed class ApplicationMatcher : IApplicationMatcher
         IReadOnlyList<ApplicationDescriptor> applications)
     {
         List<List<ApplicationDescriptor>> groups = [];
-        foreach (ApplicationDescriptor application in applications)
+        foreach (ApplicationDescriptor application in applications
+                     .OrderBy(DescriptorSortKey, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(DescriptorSortKey, StringComparer.Ordinal))
         {
             List<ApplicationDescriptor>? selectedGroup = null;
             int selectedRank = 0;
@@ -339,7 +341,8 @@ public sealed class ApplicationMatcher : IApplicationMatcher
     {
         ApplicationDescriptor primary = records
             .OrderByDescending(CompletenessScore)
-            .ThenBy(application => application.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(DescriptorSortKey, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(DescriptorSortKey, StringComparer.Ordinal)
             .First();
         return primary with
         {
@@ -381,7 +384,25 @@ public sealed class ApplicationMatcher : IApplicationMatcher
     {
         return HasValue(preferred)
             ? preferred
-            : values.FirstOrDefault(HasValue);
+            : values
+                .Where(HasValue)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(value => value, StringComparer.Ordinal)
+                .FirstOrDefault();
+    }
+
+    private static string DescriptorSortKey(ApplicationDescriptor application)
+    {
+        return string.Join(
+            '\u001F',
+            application.DisplayName,
+            application.WingetPackageId,
+            application.MsixPackageFamilyName,
+            application.MsiProductCode,
+            application.Publisher,
+            application.InstallLocation,
+            application.Architecture,
+            application.Version);
     }
 
     private static bool QualifiersMatch(
