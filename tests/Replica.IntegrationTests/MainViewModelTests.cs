@@ -85,7 +85,8 @@ public sealed class MainViewModelTests
             updateService ?? new FakeUpdateCheckService(),
             new FakeWindowsCompatibilityService(),
             new FakeEnvironmentScanner(),
-            new DiffViewerViewModel());
+            new DiffViewerViewModel(),
+            new RestoreDryRunViewModel());
     }
 
     private sealed class FakeAppVersionService : IAppVersionService

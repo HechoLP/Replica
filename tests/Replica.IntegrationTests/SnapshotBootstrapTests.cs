@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Replica.App.Bootstrap;
 using Replica.App.ViewModels;
+using Replica.Core.Planning;
 using Replica.Core.Services;
 using Replica.Infrastructure.Snapshots;
 
@@ -52,5 +53,7 @@ public sealed class SnapshotBootstrapTests
 
         Assert.NotNull(services.GetRequiredService<IEnvironmentDiffEngine>());
         Assert.NotNull(services.GetRequiredService<DiffViewerViewModel>());
+        Assert.IsType<RestorePlanner>(services.GetRequiredService<IRestorePlanner>());
+        Assert.NotNull(services.GetRequiredService<RestoreDryRunViewModel>());
     }
 }

@@ -42,7 +42,8 @@ public sealed partial class MainViewModel : ObservableObject
         IUpdateCheckService updateCheckService,
         IWindowsCompatibilityService compatibilityService,
         IEnvironmentScanner environmentScanner,
-        DiffViewerViewModel diffViewer)
+        DiffViewerViewModel diffViewer,
+        RestoreDryRunViewModel restoreDryRun)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -54,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject
         Tagline = localizationService.GetString("ProductTagline");
         Compatibility = compatibilityService.GetCompatibility();
         DiffViewer = diffViewer;
+        RestoreDryRun = restoreDryRun;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -80,6 +82,8 @@ public sealed partial class MainViewModel : ObservableObject
     public WindowsCompatibilityInfo Compatibility { get; }
 
     public DiffViewerViewModel DiffViewer { get; }
+
+    public RestoreDryRunViewModel RestoreDryRun { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
