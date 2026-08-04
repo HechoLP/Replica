@@ -6,6 +6,7 @@ using Replica.Core.Models;
 using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
 using Replica.Infrastructure.Paths;
+using Replica.Infrastructure.Snapshots;
 using Replica.Infrastructure.Updates;
 
 namespace Replica.App.Bootstrap;
@@ -26,6 +27,9 @@ public static class AppBootstrapper
         services.AddSingleton<IReleaseVersionComparer, ReleaseVersionComparer>();
         services.AddSingleton<IReleaseProvider, PlaceholderReleaseProvider>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
+        services.AddSingleton<ISnapshotSelectionEstimator, SnapshotSelectionEstimator>();
+        services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
+        services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
