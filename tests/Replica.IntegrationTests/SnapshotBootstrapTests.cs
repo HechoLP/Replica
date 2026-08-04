@@ -16,4 +16,20 @@ public sealed class SnapshotBootstrapTests
         Assert.IsType<ReplicaSnapshotReader>(services.GetRequiredService<ISnapshotReader>());
         Assert.IsType<ReplicaSnapshotWriter>(services.GetRequiredService<ISnapshotWriter>());
     }
+
+    [Fact]
+    public void EnvironmentScannerServicesResolveFromApplicationBootstrapper()
+    {
+        using ServiceProvider services = AppBootstrapper.BuildServices();
+
+        Assert.NotNull(services.GetRequiredService<IEnvironmentScanner>());
+        Assert.NotNull(services.GetRequiredService<IApplicationScanner>());
+        Assert.NotNull(services.GetRequiredService<IWinGetScanner>());
+        Assert.NotNull(services.GetRequiredService<IRegistryApplicationScanner>());
+        Assert.NotNull(services.GetRequiredService<IMsixApplicationScanner>());
+        Assert.NotNull(services.GetRequiredService<IEnvironmentVariableScanner>());
+        Assert.NotNull(services.GetRequiredService<IFontScanner>());
+        Assert.NotNull(services.GetRequiredService<IWindowsInfoScanner>());
+        Assert.NotNull(services.GetRequiredService<IProcessRunner>());
+    }
 }

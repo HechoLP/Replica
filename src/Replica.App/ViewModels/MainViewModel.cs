@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Replica.Core.Models;
 using Replica.Core.Navigation;
+using Replica.Core.Scanning;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
 
@@ -11,11 +12,27 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IAppVersionService _appVersion;
     private readonly IDialogService _dialogService;
+    private readonly IEnvironmentScanner _environmentScanner;
     private readonly INavigationService _navigationService;
     private readonly IUpdateCheckService _updateCheckService;
 
     [ObservableProperty]
     private bool _isSnapshotTypePickerVisible;
+
+    [ObservableProperty]
+    private bool _isScanning;
+
+    [ObservableProperty]
+    private bool _isScanSummaryVisible;
+
+    [ObservableProperty]
+    private int _scanProgressPercentage;
+
+    [ObservableProperty]
+    private string _scanStatus = "스캔 준비";
+
+    [ObservableProperty]
+    private string _scanSummaryText = string.Empty;
 
     public MainViewModel(
         IAppVersionService appVersion,
@@ -23,10 +40,12 @@ public sealed partial class MainViewModel : ObservableObject
         ILocalizationService localizationService,
         INavigationService navigationService,
         IUpdateCheckService updateCheckService,
-        IWindowsCompatibilityService compatibilityService)
+        IWindowsCompatibilityService compatibilityService,
+        IEnvironmentScanner environmentScanner)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
+        _environmentScanner = environmentScanner;
         _navigationService = navigationService;
         _updateCheckService = updateCheckService;
 
@@ -60,10 +79,55 @@ public sealed partial class MainViewModel : ObservableObject
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
-    [RelayCommand]
-    private void ScanCurrentComputer()
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task ScanCurrentComputerAsync(CancellationToken cancellationToken)
     {
-        ShowPlannedFeature("현재 PC 스캔");
+        IsScanning = true;
+        IsScanSummaryVisible = false;
+        ScanProgressPercentage = 0;
+        ScanStatus = "스캔을 시작합니다.";
+
+        Progress<EnvironmentScanProgress> progress = new(update =>
+        {
+            ScanStatus = update.Status;
+            ScanProgressPercentage = update.TotalStages == 0
+                ? 0
+                : (int)Math.Round(
+                    update.CompletedStages * 100d / update.TotalStages,
+                    MidpointRounding.AwayFromZero);
+        });
+
+        try
+        {
+            EnvironmentScanResult result = await _environmentScanner
+                .ScanAsync(progress, cancellationToken);
+            EnvironmentScanSummary summary = result.Summary;
+            ScanSummaryText = string.Join(
+                System.Environment.NewLine,
+                $"프로그램: {summary.ApplicationCount:N0}",
+                $"winget 매칭: {summary.WinGetMatchCount:N0}",
+                $"미매칭 프로그램: {summary.UnmatchedApplicationCount:N0}",
+                $"환경변수: {summary.EnvironmentVariableCount:N0}",
+                $"민감 값 제외: {summary.SensitiveExclusionCount:N0}",
+                $"경고: {summary.WarningCount:N0}");
+            ScanStatus = "읽기 전용 스캔이 완료되었습니다.";
+            ScanProgressPercentage = 100;
+            IsScanSummaryVisible = true;
+            _dialogService.ShowMessage("현재 PC 스캔", ScanSummaryText);
+        }
+        catch (OperationCanceledException)
+        {
+            ScanStatus = "스캔이 취소되었습니다. PC는 변경되지 않았습니다.";
+        }
+        catch (Exception)
+        {
+            ScanStatus = "스캔을 완료하지 못했습니다. PC는 변경되지 않았습니다.";
+            _dialogService.ShowMessage("현재 PC 스캔", ScanStatus);
+        }
+        finally
+        {
+            IsScanning = false;
+        }
     }
 
     [RelayCommand]

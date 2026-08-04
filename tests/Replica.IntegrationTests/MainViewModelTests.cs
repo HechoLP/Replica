@@ -2,6 +2,7 @@ using System.Globalization;
 using Replica.App.ViewModels;
 using Replica.Core.Models;
 using Replica.Core.Navigation;
+using Replica.Core.Scanning;
 using Replica.Core.Services;
 
 namespace Replica.IntegrationTests;
@@ -25,11 +26,26 @@ public sealed class MainViewModelTests
         MainViewModel viewModel = CreateViewModel(out FakeDialogService dialog, out _);
 
         Exception? exception = Record.Exception(
-            () => viewModel.ScanCurrentComputerCommand.Execute(null));
+            () => viewModel.OpenSnapshotCommand.Execute(null));
 
         Assert.Null(exception);
         Assert.Contains("구현 예정", dialog.LastMessage, StringComparison.Ordinal);
         Assert.Contains("변경하지 않습니다", dialog.LastMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ScanCurrentComputerCommand_ShowsReadOnlyScanSummary()
+    {
+        MainViewModel viewModel = CreateViewModel(out FakeDialogService dialog, out _);
+
+        await viewModel.ScanCurrentComputerCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsScanSummaryVisible);
+        Assert.False(viewModel.IsScanning);
+        Assert.Equal(100, viewModel.ScanProgressPercentage);
+        Assert.Contains("프로그램: 3", viewModel.ScanSummaryText, StringComparison.Ordinal);
+        Assert.Contains("민감 값 제외: 1", viewModel.ScanSummaryText, StringComparison.Ordinal);
+        Assert.Contains("경고: 1", dialog.LastMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -67,7 +83,8 @@ public sealed class MainViewModelTests
             new FakeLocalizationService(),
             navigation,
             updateService ?? new FakeUpdateCheckService(),
-            new FakeWindowsCompatibilityService());
+            new FakeWindowsCompatibilityService(),
+            new FakeEnvironmentScanner());
     }
 
     private sealed class FakeAppVersionService : IAppVersionService
@@ -142,6 +159,31 @@ public sealed class MainViewModelTests
                 new Version(10, 0, 22631),
                 "Windows 11",
                 "Windows 11 compatibility confirmed.");
+        }
+    }
+
+    private sealed class FakeEnvironmentScanner : IEnvironmentScanner
+    {
+        public Task<EnvironmentScanResult> ScanAsync(
+            IProgress<EnvironmentScanProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new EnvironmentScanProgress(
+                EnvironmentScanStage.Completed,
+                7,
+                7,
+                "스캔이 완료되었습니다."));
+            return Task.FromResult(
+                new EnvironmentScanResult(
+                    null,
+                    [],
+                    [],
+                    [],
+                    [],
+                    [],
+                    [new ScanWarning("Test", "Partial", "Partial test warning.")],
+                    new EnvironmentScanSummary(3, 2, 1, 4, 1, 1)));
         }
     }
 }
