@@ -1,0 +1,12 @@
+.dotnet/
+.vs/
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+*.replica
+*.db
+*.db-shm
+*.db-wal
+*.log
