@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Replica.Core\Replica.Core.csproj" />
+    <ProjectReference Include="..\Replica.Infrastructure\Replica.Infrastructure.csproj" />
+    <ProjectReference Include="..\Replica.Plugins.BuiltIn\Replica.Plugins.BuiltIn.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>Replica</AssemblyName>
+    <RootNamespace>Replica.App</RootNamespace>
+  </PropertyGroup>
+
+</Project>

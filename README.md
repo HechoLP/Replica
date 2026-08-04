@@ -30,7 +30,7 @@ The planned desktop stack is C#, .NET 10 LTS, WPF/MVVM, SQLite, and a self-conta
 
 ## Project status
 
-The repository is currently at the product and architecture foundation stage. No working application or recovery engine is implemented yet. The staged delivery plan is in [ROADMAP.md](docs/ROADMAP.md).
+Replica now has a compilable .NET 10 WPF desktop bootstrap with its main navigation surface, dependency injection, application services, localization/theme structure, tests, and Windows CI. Machine scanning, snapshot persistence, software installation, settings restoration, and every other system-changing capability remain unimplemented. The staged delivery plan is in [ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 

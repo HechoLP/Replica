@@ -1,0 +1,6 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+    <system:String x:Key="ProductName">Replica</system:String>
+    <system:String x:Key="ProductTagline">Clone your Windows setup, not your files.</system:String>
+</ResourceDictionary>

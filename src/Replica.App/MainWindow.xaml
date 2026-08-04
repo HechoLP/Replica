@@ -1,0 +1,145 @@
+<Window x:Class="Replica.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Replica"
+        Width="1080"
+        Height="720"
+        MinWidth="820"
+        MinHeight="600"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Padding="40,30,40,24"
+                Background="{DynamicResource HeaderBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock FontSize="34"
+                               FontWeight="SemiBold"
+                               Text="{Binding Title}" />
+                    <TextBlock Margin="0,8,0,0"
+                               FontSize="16"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               Text="{Binding Tagline}" />
+                </StackPanel>
+                <Border Grid.Column="1"
+                        Padding="12,7"
+                        VerticalAlignment="Center"
+                        Background="{DynamicResource BadgeBackgroundBrush}"
+                        CornerRadius="14">
+                    <TextBlock Foreground="{DynamicResource AccentBrush}"
+                               Text="{Binding VersionText}" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1"
+                      Padding="40,28"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="920">
+                <TextBlock Margin="0,0,0,14"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="시작하기" />
+
+                <WrapPanel>
+                    <Button Command="{Binding ScanCurrentComputerCommand}"
+                            Content="현재 PC 스캔"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding CreateSnapshotCommand}"
+                            Content="Snapshot 만들기"
+                            Style="{DynamicResource PrimaryActionButtonStyle}" />
+                    <Button Command="{Binding CreateRecoverySnapshotCommand}"
+                            Content="초기화 복구 Snapshot 만들기"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding OpenSnapshotCommand}"
+                            Content="Snapshot 열기"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding RestoreAfterResetCommand}"
+                            Content="초기화 후 복구"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding ShowSnapshotHistoryCommand}"
+                            Content="Snapshot 기록"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding CheckForUpdatesCommand}"
+                            Content="업데이트 확인"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding ShowSettingsCommand}"
+                            Content="설정"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                    <Button Command="{Binding ShowAboutCommand}"
+                            Content="정보"
+                            Style="{DynamicResource ActionButtonStyle}" />
+                </WrapPanel>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSnapshotTypePickerVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <TextBlock FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Text="Snapshot 유형 선택" />
+                        <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding SnapshotTypes}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Margin="0,0,0,10"
+                                            Padding="16,12"
+                                            HorizontalContentAlignment="Stretch"
+                                            Background="{DynamicResource WindowBackgroundBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            Command="{Binding DataContext.SelectSnapshotTypeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       Text="{Binding Description}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                Padding="40,12"
+                Background="{DynamicResource FooterBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0">
+            <TextBlock FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="{Binding Compatibility.Message}" />
+        </Border>
+    </Grid>
+</Window>
