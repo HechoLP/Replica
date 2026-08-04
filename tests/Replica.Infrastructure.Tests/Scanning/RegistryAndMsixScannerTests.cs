@@ -22,6 +22,7 @@ public sealed class RegistryAndMsixScannerTests
         Assert.Equal("x64", application.Architecture);
         Assert.Equal("C:\\Example", application.InstallLocation);
         Assert.Equal("MSI", application.InstallType);
+        Assert.Equal("db9a8ec2-ab7a-4837-9378-a4327b90cf6b", application.MsiProductCode);
     }
 
     [Fact]

@@ -169,11 +169,20 @@ public sealed class RegistryApplicationScanner : IRegistryApplicationScanner
                 record.Scope,
                 record.Architecture,
                 record.IsWindowsInstaller ? "MSI" : "Desktop",
-                false))
+                false,
+                MsiProductCode: GetMsiProductCode(record)))
             .OrderBy(application => application.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
 
         return new RegistryApplicationScanResult(applications, []);
+    }
+
+    private static string? GetMsiProductCode(RegistryApplicationRecord record)
+    {
+        return record.IsWindowsInstaller &&
+            Guid.TryParse(record.RegistryKeyName.Trim('{', '}'), out Guid productCode)
+            ? productCode.ToString("D")
+            : null;
     }
 
     private static string CreateIdentity(RegistryApplicationRecord record)

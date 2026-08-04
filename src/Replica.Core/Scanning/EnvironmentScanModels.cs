@@ -48,7 +48,8 @@ public sealed record ScannedApplication(
     string InstallType,
     bool IsRestorable,
     bool IsFramework = false,
-    string? PackageFamilyName = null);
+    string? PackageFamilyName = null,
+    string? MsiProductCode = null);
 
 public sealed record WinGetPackage(
     string PackageId,

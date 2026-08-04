@@ -32,4 +32,15 @@ public sealed class SnapshotBootstrapTests
         Assert.NotNull(services.GetRequiredService<IWindowsInfoScanner>());
         Assert.NotNull(services.GetRequiredService<IProcessRunner>());
     }
+
+    [Fact]
+    public void ApplicationMatchingServicesResolveFromApplicationBootstrapper()
+    {
+        using ServiceProvider services = AppBootstrapper.BuildServices();
+
+        Assert.NotNull(services.GetRequiredService<IApplicationIdentityNormalizer>());
+        Assert.NotNull(services.GetRequiredService<IApplicationMatcher>());
+        Assert.NotNull(services.GetRequiredService<IApplicationVersionComparer>());
+        Assert.NotNull(services.GetRequiredService<IApplicationAutomationPolicy>());
+    }
 }
