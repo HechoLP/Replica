@@ -1,0 +1,9 @@
+{
+  "queries": {
+    "PowerShellVersion": "7.5.2",
+    "PowerShellModules": "[{\"Name\":\"Pester\",\"Version\":\"5.7.1\",\"RepositorySourceLocation\":\"https://www.powershellgallery.com\"}]"
+  },
+  "files": {
+    "{Documents}/PowerShell/Microsoft.PowerShell_profile.ps1": "Set-Alias ll Get-ChildItem\n$env:ACCESS_TOKEN = 'TOP_SECRET'\nImport-Module Pester"
+  }
+}

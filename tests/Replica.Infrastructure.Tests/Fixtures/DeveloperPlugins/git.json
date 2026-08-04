@@ -1,0 +1,10 @@
+{
+  "queries": {
+    "GitVersion": "git version 2.50.0.windows.1",
+    "GitConfiguration": "user.name=Replica User\nuser.email=replica@example.invalid\ninit.defaultbranch=main\nalias.co=checkout\ncore.editor=code --wait\ncredential.helper=manager\ncredential.password=TOP_SECRET\nhttp.extraheader=Authorization: TOP_SECRET"
+  },
+  "files": {
+    "{UserProfile}/.ssh/id_ed25519": "TOP_SECRET",
+    "{UserProfile}/.ssh/id_ed25519.pub": "ssh-ed25519 AAAATEST replica@example.invalid"
+  }
+}

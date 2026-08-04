@@ -21,6 +21,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Replica.Core\Replica.Core.csproj" />
     <ProjectReference Include="..\..\src\Replica.Infrastructure\Replica.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Replica.Plugins.BuiltIn\Replica.Plugins.BuiltIn.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\DeveloperPlugins\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
