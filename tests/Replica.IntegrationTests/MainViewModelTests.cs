@@ -84,7 +84,8 @@ public sealed class MainViewModelTests
             navigation,
             updateService ?? new FakeUpdateCheckService(),
             new FakeWindowsCompatibilityService(),
-            new FakeEnvironmentScanner());
+            new FakeEnvironmentScanner(),
+            new DiffViewerViewModel());
     }
 
     private sealed class FakeAppVersionService : IAppVersionService
