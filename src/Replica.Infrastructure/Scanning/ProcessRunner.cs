@@ -40,6 +40,12 @@ public sealed class ProcessRunner : IProcessRunner
                 "The output character limit must be between 1 and 4,194,304.");
         }
 
+        if (request.Operation == ProcessOperation.WinGetInstall &&
+            !IsValidPackageIdentifier(request.PackageIdentifier))
+        {
+            throw new ArgumentException("A valid winget package identifier is required.", nameof(request));
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         ProcessTool tool = request.Operation == ProcessOperation.MsixInventory
@@ -82,6 +88,16 @@ public sealed class ProcessRunner : IProcessRunner
             case ProcessOperation.WinGetList:
                 startInfo.ArgumentList.Add("list");
                 startInfo.ArgumentList.Add("--disable-interactivity");
+                break;
+            case ProcessOperation.WinGetInstall:
+                startInfo.ArgumentList.Add("install");
+                startInfo.ArgumentList.Add("--id");
+                startInfo.ArgumentList.Add(request.PackageIdentifier!);
+                startInfo.ArgumentList.Add("--exact");
+                startInfo.ArgumentList.Add("--silent");
+                startInfo.ArgumentList.Add("--disable-interactivity");
+                startInfo.ArgumentList.Add("--accept-package-agreements");
+                startInfo.ArgumentList.Add("--accept-source-agreements");
                 break;
             case ProcessOperation.MsixInventory:
                 startInfo.ArgumentList.Add("-NoLogo");
@@ -291,6 +307,14 @@ public sealed class ProcessRunner : IProcessRunner
         };
 
         return File.Exists(path) ? path : null;
+    }
+
+    private static bool IsValidPackageIdentifier(string? value)
+    {
+        return value is { Length: > 1 and <= 255 } &&
+            value.Contains('.', StringComparison.Ordinal) &&
+            value.All(character =>
+                char.IsLetterOrDigit(character) || character is '.' or '-' or '_');
     }
 
     private static void KillProcess(Process process)

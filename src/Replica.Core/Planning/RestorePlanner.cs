@@ -131,7 +131,8 @@ public sealed class RestorePlanner : IRestorePlanner
             classification.IsManualOnly,
             item.Area,
             item.Key,
-            item.ReasonCode);
+            item.ReasonCode,
+            item.MatchConfidence);
     }
 
     private static RestoreAction CreateValidationAction(RestoreAction primary)
@@ -572,6 +573,7 @@ public sealed class RestorePlanner : IRestorePlanner
             action.EstimatedDownloadBytes,
             action.IsSelected,
             action.IsManualOnly,
+            action.MatchConfidence,
             action.ReasonCode);
     }
 

@@ -4,6 +4,7 @@ public enum ProcessOperation
 {
     WinGetExport,
     WinGetList,
+    WinGetInstall,
     MsixInventory,
 }
 
@@ -17,7 +18,8 @@ public enum ProcessTool
 public sealed record ProcessRequest(
     ProcessOperation Operation,
     TimeSpan Timeout,
-    int MaximumOutputCharacters = 1_048_576);
+    int MaximumOutputCharacters = 1_048_576,
+    string? PackageIdentifier = null);
 
 public sealed record ProcessExecutionResult(
     int? ExitCode,

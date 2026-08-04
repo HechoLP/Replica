@@ -30,7 +30,7 @@ The planned desktop stack is C#, .NET 10 LTS, WPF/MVVM, SQLite, and a self-conta
 
 ## Project status
 
-Replica now has a compilable .NET 10 WPF desktop bootstrap, a versioned and hardened `.replica` snapshot format, a read-only Windows environment scanner, explainable application identity and version matching, and a deterministic read-only diff engine with weighted similarity scores and safety metadata. A typed restore planner converts reviewed differences into an allow-listed dependency DAG, blocks unsafe defaults, and presents a Dry Run for explicit approval in the WPF shell. Software installation, settings restoration, automatic removal, and every system-changing capability remain unimplemented. The staged delivery plan is in [ROADMAP.md](docs/ROADMAP.md).
+Replica now has a compilable .NET 10 WPF desktop bootstrap, a versioned and hardened `.replica` snapshot format, a read-only Windows environment scanner, explainable application identity and version matching, and a deterministic read-only diff engine with weighted similarity scores and safety metadata. A typed restore planner converts reviewed differences into an allow-listed dependency DAG, blocks unsafe defaults, and presents a Dry Run for explicit approval in the WPF shell. The controlled executor can apply approved winget, environment/PATH, allow-listed registry, and explicitly mapped file actions with cancellation, verification, journal-before-change enforcement, and narrow same-executable elevation. Automatic removal, automatic downgrade, arbitrary command execution, and automatic software rollback remain unsupported. The staged delivery plan is in [ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 
