@@ -14,6 +14,8 @@ public interface IRegistryValueStore
     object? GetValue(RegistryWriteRequest request);
 
     void SetValue(RegistryWriteRequest request, object value);
+
+    void DeleteValue(RegistryWriteRequest request);
 }
 
 public sealed class RegistryWriter : IRegistryWriter
@@ -140,6 +142,14 @@ public sealed class WindowsRegistryValueStore : IRegistryValueStore
         using RegistryKey key = baseKey.CreateSubKey(request.KeyPath, writable: true);
         key.SetValue(request.ValueName, value, ToRegistryValueKind(request.Kind));
         key.Flush();
+    }
+
+    public void DeleteValue(RegistryWriteRequest request)
+    {
+        using RegistryKey baseKey = OpenBaseKey(request.Hive);
+        using RegistryKey? key = baseKey.OpenSubKey(request.KeyPath, writable: true);
+        key?.DeleteValue(request.ValueName, throwOnMissingValue: false);
+        key?.Flush();
     }
 
     private static RegistryKey OpenBaseKey(string hive)

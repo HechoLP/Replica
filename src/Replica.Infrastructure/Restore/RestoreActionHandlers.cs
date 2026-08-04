@@ -190,7 +190,8 @@ public sealed class FileRestoreActionHandler : IRestoreActionHandler
             result.ReasonCode,
             result.ConflictRequiresConfirmation
                 ? "The file conflict requires user confirmation."
-                : "The file restore action was processed.");
+                : "The file restore action was processed.",
+            MutationTargetPath: result.RestoredPath);
     }
 }
 

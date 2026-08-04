@@ -56,7 +56,8 @@ public sealed record RestoreActionExecutionResult(
     string Message,
     bool RequiresRestart = false,
     int? ExitCode = null,
-    bool OutputTruncated = false);
+    bool OutputTruncated = false,
+    string? MutationTargetPath = null);
 
 public sealed record RestoreExecutionResult(
     string SessionId,
@@ -131,7 +132,9 @@ public sealed record RestoreJournalEntry(
     RestoreActionType ActionType,
     DateTimeOffset RecordedAtUtc,
     string? CurrentValueHash,
-    string ReasonCode);
+    string ReasonCode,
+    RestoreAction? Action = null,
+    FileRestoreRequest? FileRequest = null);
 
 public sealed record ElevatedRestorePlanEnvelope(
     int SchemaVersion,

@@ -2,6 +2,7 @@ using System.Globalization;
 using Replica.App.ViewModels;
 using Replica.Core.Models;
 using Replica.Core.Navigation;
+using Replica.Core.Rollback;
 using Replica.Core.Scanning;
 using Replica.Core.Services;
 
@@ -86,7 +87,8 @@ public sealed class MainViewModelTests
             new FakeWindowsCompatibilityService(),
             new FakeEnvironmentScanner(),
             new DiffViewerViewModel(),
-            new RestoreDryRunViewModel());
+            new RestoreDryRunViewModel(),
+            new RollbackViewModel(new FakeRollbackService()));
     }
 
     private sealed class FakeAppVersionService : IAppVersionService
@@ -187,5 +189,22 @@ public sealed class MainViewModelTests
                     [new ScanWarning("Test", "Partial", "Partial test warning.")],
                     new EnvironmentScanSummary(3, 2, 1, 4, 1, 1)));
         }
+    }
+
+    private sealed class FakeRollbackService : IRollbackService
+    {
+        public Task<IReadOnlyList<RollbackSessionSummary>> GetRecentSessionsAsync(
+            int maximumCount,
+            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<RollbackSessionSummary>>([]);
+
+        public Task<RollbackPlan> CreatePlanAsync(
+            string sessionId,
+            IReadOnlyCollection<string>? selectedActionIds,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<RollbackExecutionResult> ExecuteAsync(
+            RollbackPlan approvedPlan,
+            IProgress<RollbackProgress>? progress,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

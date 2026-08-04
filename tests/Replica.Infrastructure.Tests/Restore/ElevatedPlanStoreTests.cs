@@ -2,6 +2,7 @@ using Replica.Core.Diffing;
 using Replica.Core.Execution;
 using Replica.Core.Matching;
 using Replica.Core.Planning;
+using Replica.Core.Rollback;
 using Replica.Core.Services;
 using Replica.Infrastructure.Paths;
 using Replica.Infrastructure.Restore;
@@ -184,6 +185,13 @@ public sealed class ElevatedPlanStoreTests : IDisposable
     {
         public Task RecordBeforeMutationAsync(
             RestoreJournalEntry entry,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task MarkActionStateAsync(
+            string sessionId,
+            string actionId,
+            RollbackJournalState state,
+            string? mutationTargetPath,
             CancellationToken cancellationToken) => Task.CompletedTask;
     }
 

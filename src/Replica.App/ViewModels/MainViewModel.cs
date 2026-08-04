@@ -43,7 +43,8 @@ public sealed partial class MainViewModel : ObservableObject
         IWindowsCompatibilityService compatibilityService,
         IEnvironmentScanner environmentScanner,
         DiffViewerViewModel diffViewer,
-        RestoreDryRunViewModel restoreDryRun)
+        RestoreDryRunViewModel restoreDryRun,
+        RollbackViewModel rollback)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -56,6 +57,7 @@ public sealed partial class MainViewModel : ObservableObject
         Compatibility = compatibilityService.GetCompatibility();
         DiffViewer = diffViewer;
         RestoreDryRun = restoreDryRun;
+        Rollback = rollback;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -84,6 +86,8 @@ public sealed partial class MainViewModel : ObservableObject
     public DiffViewerViewModel DiffViewer { get; }
 
     public RestoreDryRunViewModel RestoreDryRun { get; }
+
+    public RollbackViewModel Rollback { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 

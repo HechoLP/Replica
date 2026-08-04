@@ -1,5 +1,6 @@
 using Replica.Core.Execution;
 using Replica.Core.Planning;
+using Replica.Core.Rollback;
 
 namespace Replica.Core.Services;
 
@@ -42,5 +43,12 @@ public interface IRestoreJournal
 {
     Task RecordBeforeMutationAsync(
         RestoreJournalEntry entry,
+        CancellationToken cancellationToken);
+
+    Task MarkActionStateAsync(
+        string sessionId,
+        string actionId,
+        RollbackJournalState state,
+        string? mutationTargetPath,
         CancellationToken cancellationToken);
 }

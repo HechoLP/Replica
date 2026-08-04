@@ -7,7 +7,7 @@ public interface IEnvironmentVariableStore
 {
     string? Get(string name, EnvironmentVariableScope scope);
 
-    void Set(string name, string value, EnvironmentVariableScope scope);
+    void Set(string name, string? value, EnvironmentVariableScope scope);
 }
 
 public interface IEnvironmentChangeNotifier
@@ -164,7 +164,7 @@ public sealed class WindowsEnvironmentVariableStore : IEnvironmentVariableStore
         return System.Environment.GetEnvironmentVariable(name, ToTarget(scope));
     }
 
-    public void Set(string name, string value, EnvironmentVariableScope scope)
+    public void Set(string name, string? value, EnvironmentVariableScope scope)
     {
         System.Environment.SetEnvironmentVariable(name, value, ToTarget(scope));
     }
