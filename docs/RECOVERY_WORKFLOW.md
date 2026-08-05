@@ -22,6 +22,10 @@
 9. Before each mutation, record and verify the rollback journal entry. Apply, verify, and report the result.
 10. Rescan affected areas and display remaining differences, restart requirements, and manual follow-up.
 
+The WPF implementation exposes these phases as a persisted 19-step wizard. It supports explicit drive mapping, hardware-dependent warnings, checksum-protected resume state, failed-action-only retries, and before/after similarity. See [Post-reset recovery wizard](RECOVERY_WIZARD.md).
+
+Replica never reboots Windows automatically. If a restart is required, login-time resume registration requires separate approval, uses the same executable, and still asks the user whether to continue after login. Completed actions are not scheduled again.
+
 ## Conflict behavior
 
 Existing files default to keeping the current copy or prompting the user. Supported options are keep current, replace with snapshot copy, rename and keep both, keep newest, or ask for every conflict. Destructive resolution is never inferred from Exact mode.

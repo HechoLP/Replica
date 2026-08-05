@@ -20,7 +20,8 @@ public sealed record ReplicaSnapshotManifest(
 
 public sealed record ReplicaSnapshotMetadata(
     ReplicaMachineInfo Machine,
-    IReadOnlyList<ReplicaArtifact> Artifacts);
+    IReadOnlyList<ReplicaArtifact> Artifacts,
+    Replica.Core.Recovery.ReplicaHardwareInfo? Hardware = null);
 
 public sealed record ReplicaSnapshotEncryptionInfo(
     string Algorithm,

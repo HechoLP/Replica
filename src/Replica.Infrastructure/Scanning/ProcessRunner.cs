@@ -9,6 +9,8 @@ public sealed class ProcessRunner : IProcessRunner
 {
     private const string MsixInventoryScript =
         "Get-AppxPackage | Select-Object Name,PackageFullName,PackageFamilyName,Publisher,Version,Architecture,InstallLocation,IsFramework,SignatureKind,NonRemovable | ConvertTo-Json -Compress -Depth 3";
+    private const string HardwareInventoryScript =
+        "$gpu=@(Get-CimInstance Win32_VideoController | ForEach-Object Name); $audio=@(Get-CimInstance Win32_SoundDevice | ForEach-Object Name); $display=@(Get-CimInstance Win32_DesktopMonitor | ForEach-Object { [pscustomobject]@{Name=$_.Name;Width=$_.ScreenWidth;Height=$_.ScreenHeight;Primary=$false} }); [pscustomobject]@{GraphicsAdapters=$gpu;AudioDevices=$audio;Displays=$display} | ConvertTo-Json -Compress -Depth 4";
 
     private readonly IReplicaPathProvider _pathProvider;
 
@@ -48,7 +50,8 @@ public sealed class ProcessRunner : IProcessRunner
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ProcessTool tool = request.Operation == ProcessOperation.MsixInventory
+        ProcessTool tool = request.Operation is ProcessOperation.MsixInventory or
+            ProcessOperation.HardwareInventory
             ? ProcessTool.PowerShell
             : ProcessTool.WinGet;
         string? executable = ResolveExecutable(tool);
@@ -105,6 +108,13 @@ public sealed class ProcessRunner : IProcessRunner
                 startInfo.ArgumentList.Add("-NonInteractive");
                 startInfo.ArgumentList.Add("-Command");
                 startInfo.ArgumentList.Add(MsixInventoryScript);
+                break;
+            case ProcessOperation.HardwareInventory:
+                startInfo.ArgumentList.Add("-NoLogo");
+                startInfo.ArgumentList.Add("-NoProfile");
+                startInfo.ArgumentList.Add("-NonInteractive");
+                startInfo.ArgumentList.Add("-Command");
+                startInfo.ArgumentList.Add(HardwareInventoryScript);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(request), request.Operation, null);

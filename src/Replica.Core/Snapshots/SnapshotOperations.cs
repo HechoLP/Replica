@@ -1,3 +1,5 @@
+using Replica.Core.Recovery;
+
 namespace Replica.Core.Snapshots;
 
 public sealed record ReplicaSnapshotInventory(
@@ -31,7 +33,8 @@ public sealed record ReplicaSnapshotWriteRequest(
     IReadOnlyList<string> Capabilities,
     IReadOnlyList<ReplicaExclusion> Exclusions,
     ReplicaRecoveryOptions Recovery,
-    ReplicaSnapshotEncryptionOptions? Encryption = null);
+    ReplicaSnapshotEncryptionOptions? Encryption = null,
+    ReplicaHardwareInfo? Hardware = null);
 
 public sealed class ReplicaSnapshotReadRequest
 {

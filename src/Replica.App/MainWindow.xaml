@@ -92,6 +92,138 @@
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="12">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding RecoveryWizard.IsVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel DataContext="{Binding RecoveryWizard}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Text="초기화 후 복구" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding CurrentStepText}" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Padding="14,8"
+                                    Command="{Binding CancelCommand}"
+                                    Content="복구 취소" />
+                        </Grid>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding StatusText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Text="{Binding SourceComputerText}"
+                                   TextWrapping="Wrap" />
+
+                        <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding Steps}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,7,7"
+                                            Padding="8,5"
+                                            Background="{DynamicResource BadgeBackgroundBrush}"
+                                            CornerRadius="8">
+                                        <TextBlock FontSize="12">
+                                            <Run Text="{Binding Number}" />
+                                            <Run Text=". " />
+                                            <Run Text="{Binding Name}" />
+                                            <Run Text=" · " />
+                                            <Run Foreground="{DynamicResource AccentBrush}" Text="{Binding State}" />
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Margin="0,10,0,5"
+                                   FontWeight="SemiBold"
+                                   Text="드라이브 경로 매핑" />
+                        <DataGrid MaxHeight="190"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  ItemsSource="{Binding PathMappings}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="210" Header="원본 경로" Binding="{Binding SourcePath}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="*" Header="새 경로" Binding="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Width="105" Header="적용 대상" Binding="{Binding Scope}" IsReadOnly="True" />
+                                <DataGridTemplateColumn Width="145" Header="충돌 처리">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding ConflictBehaviorOptions}"
+                                                      SelectedItem="{Binding ConflictBehavior, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Width="100" Header="예상 용량" Binding="{Binding EstimatedBytes}" IsReadOnly="True" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Padding="14,8" Command="{Binding AnalyzeCommand}" Content="현재 PC 분석" IsEnabled="{Binding CanAnalyze}" />
+                            <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding ApprovePlanCommand}" Content="계획 최종 승인" IsEnabled="{Binding CanApprovePlan}" />
+                            <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding ExecuteCommand}" Content="복원 실행" IsEnabled="{Binding CanExecute}" />
+                            <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding RetryFailedCommand}" Content="실패 작업 재시도" IsEnabled="{Binding CanRetry}" />
+                            <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding ApproveRestartCommand}" Content="재부팅 후 재개 등록" IsEnabled="{Binding CanApproveRestart}" />
+                            <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding ConfirmResumeCommand}" Content="복구 계속" IsEnabled="{Binding CanConfirmResume}" />
+                        </WrapPanel>
+
+                        <TextBlock Margin="0,12,0,0" Text="{Binding PlanSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0" FontWeight="SemiBold" Text="{Binding ScoreText}" />
+                        <TextBlock Margin="0,6,0,0" Text="{Binding ResultText}" TextWrapping="Wrap" />
+
+                        <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding HardwareDifferences}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap">
+                                        <Run FontWeight="SemiBold" Text="하드웨어 경고 · " />
+                                        <Run Text="{Binding Category}" />
+                                        <Run Text=" — " />
+                                        <Run Text="{Binding Guidance}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ManualActions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap">
+                                        <Run FontWeight="SemiBold" Text="수동 작업 · " />
+                                        <Run Text="{Binding DisplayName}" />
+                                        <Run Text=" — " />
+                                        <Run Text="{Binding Guidance}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
                     <StackPanel>
                         <TextBlock FontSize="18"
                                    FontWeight="SemiBold"

@@ -118,12 +118,16 @@ public sealed class RegistryWriter : IRegistryWriter
 public sealed class BuiltInRegistryWriteAllowList : IRegistryWriteAllowList
 {
     private const string ReplicaSettingsPath = "Software\\Replica\\RestorableSettings";
+    private const string RecoveryRunPath = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    private const string RecoveryRunValueName = "ReplicaRecoveryResume";
 
     public bool IsAllowed(RegistryWriteRequest request)
     {
         return request.Hive.Equals("HKCU", StringComparison.OrdinalIgnoreCase) &&
             (request.KeyPath.Equals(ReplicaSettingsPath, StringComparison.OrdinalIgnoreCase) ||
-             request.KeyPath.StartsWith($"{ReplicaSettingsPath}\\", StringComparison.OrdinalIgnoreCase));
+             request.KeyPath.StartsWith($"{ReplicaSettingsPath}\\", StringComparison.OrdinalIgnoreCase) ||
+             request.KeyPath.Equals(RecoveryRunPath, StringComparison.OrdinalIgnoreCase) &&
+             request.ValueName.Equals(RecoveryRunValueName, StringComparison.Ordinal));
     }
 }
 

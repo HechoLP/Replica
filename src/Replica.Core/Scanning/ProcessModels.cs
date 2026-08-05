@@ -6,6 +6,7 @@ public enum ProcessOperation
     WinGetList,
     WinGetInstall,
     MsixInventory,
+    HardwareInventory,
 }
 
 public enum ProcessTool
