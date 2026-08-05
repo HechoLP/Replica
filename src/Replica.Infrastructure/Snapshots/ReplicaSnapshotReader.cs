@@ -558,7 +558,7 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
         return destination.ToArray();
     }
 
-    private static async Task CopyPlaintextEntryAsync(
+    internal static async Task CopyPlaintextEntryAsync(
         ZipArchiveEntry entry,
         Stream destination,
         ReplicaSnapshotManifest manifest,

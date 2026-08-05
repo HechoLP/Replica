@@ -396,7 +396,7 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             request.Machine.Locale,
             request.Capabilities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             exclusions,
-            new ReplicaSnapshotMetadata(request.Machine, artifacts));
+            new ReplicaSnapshotMetadata(request.Machine, artifacts, request.Hardware));
     }
 
     private static async Task WriteRequiredMetadataAsync(

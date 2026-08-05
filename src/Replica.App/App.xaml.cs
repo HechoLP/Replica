@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Replica.App.Bootstrap;
 using Replica.App.Services;
 using Replica.Core.Execution;
+using Replica.Core.Recovery;
 using Replica.Core.Services;
 using Replica.Infrastructure.Restore;
 
@@ -43,6 +44,11 @@ public partial class App : Application
 
             MainWindow = _services.GetRequiredService<MainWindow>();
             MainWindow.Show();
+            if (RecoveryResumeArgumentsParser.TryParse(e.Args, out string? recoverySessionId))
+            {
+                _ = _services.GetRequiredService<Replica.App.ViewModels.RecoveryWizardViewModel>()
+                    .LoadResumeAsync(recoverySessionId!);
+            }
         }
         catch (Exception exception)
         {

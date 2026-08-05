@@ -44,7 +44,8 @@ public sealed partial class MainViewModel : ObservableObject
         IEnvironmentScanner environmentScanner,
         DiffViewerViewModel diffViewer,
         RestoreDryRunViewModel restoreDryRun,
-        RollbackViewModel rollback)
+        RollbackViewModel rollback,
+        RecoveryWizardViewModel? recoveryWizard = null)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -58,6 +59,7 @@ public sealed partial class MainViewModel : ObservableObject
         DiffViewer = diffViewer;
         RestoreDryRun = restoreDryRun;
         Rollback = rollback;
+        RecoveryWizard = recoveryWizard;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -88,6 +90,8 @@ public sealed partial class MainViewModel : ObservableObject
     public RestoreDryRunViewModel RestoreDryRun { get; }
 
     public RollbackViewModel Rollback { get; }
+
+    public RecoveryWizardViewModel? RecoveryWizard { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
@@ -161,9 +165,15 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RestoreAfterReset()
+    private async Task RestoreAfterResetAsync(CancellationToken cancellationToken)
     {
-        ShowPlannedFeature("초기화 후 복구");
+        if (RecoveryWizard is null)
+        {
+            ShowPlannedFeature("초기화 후 복구");
+            return;
+        }
+
+        await RecoveryWizard.BeginAsync(cancellationToken);
     }
 
     [RelayCommand]

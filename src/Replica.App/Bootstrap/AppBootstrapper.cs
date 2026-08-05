@@ -8,9 +8,11 @@ using Replica.Core.Matching;
 using Replica.Core.Models;
 using Replica.Core.Planning;
 using Replica.Core.Plugins;
+using Replica.Core.Recovery;
 using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
 using Replica.Infrastructure.Paths;
+using Replica.Infrastructure.Recovery;
 using Replica.Infrastructure.Restore;
 using Replica.Infrastructure.Scanning;
 using Replica.Infrastructure.Snapshots;
@@ -87,9 +89,15 @@ public static class AppBootstrapper
         services.AddSingleton<IRestoreActionHandler, ValidationRestoreActionHandler>();
         services.AddSingleton<IRestoreExecutor, RestoreExecutor>();
         services.AddSingleton<IElevatedExecutorHost, ElevatedExecutorHost>();
+        services.AddSingleton<IRecoverySessionStore, JsonRecoverySessionStore>();
+        services.AddSingleton<IRecoveryStartupRegistrar, WindowsRecoveryStartupRegistrar>();
+        services.AddSingleton<IRecoveryHardwareScanner, WindowsRecoveryHardwareScanner>();
+        services.AddSingleton<IRecoveryWizardRuntime, RecoveryWizardRuntime>();
+        services.AddSingleton<IRecoveryWizardService, RecoveryWizardService>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IRecoveryDialogService, RecoveryDialogService>();
         services.AddSingleton<ILocalizationService, ResourceLocalizationService>();
         services.AddSingleton<IThemeService, WpfThemeService>();
         services.AddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
@@ -98,6 +106,7 @@ public static class AppBootstrapper
         services.AddSingleton<DiffViewerViewModel>();
         services.AddSingleton<RestoreDryRunViewModel>();
         services.AddSingleton<RollbackViewModel>();
+        services.AddSingleton<RecoveryWizardViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(
