@@ -30,6 +30,8 @@ The application shows version, channel, publication date, release notes link, as
 
 Update failure does not block snapshot or offline recovery features. API responses, redirects, file names, sizes, and hashes are treated as untrusted input and bounded appropriately.
 
+The before-reset workflow may also retain `ReplicaSetup.exe` in a user-selected Recovery folder. This is an explicit download, separate from the `.replica` archive. Replica accepts only a published release from the configured owner/repository and the exact installer asset name, checks the declared size and GitHub-provided SHA-256 digest when available, writes through a temporary extension, refuses overwrite, and never starts the installer automatically. Users may select the latest stable release or an exact published tag.
+
 ## Retention and provenance
 
 Release notes link to the source tag and commit. Checksums are generated in CI from the exact uploaded installer. Build logs must not contain signing keys or secrets. Signing credentials, when introduced, live only in protected CI secret storage with environment approval and rotation procedures.

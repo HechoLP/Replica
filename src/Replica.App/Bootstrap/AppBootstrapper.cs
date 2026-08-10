@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Replica.App.Services;
@@ -14,6 +15,7 @@ using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
 using Replica.Infrastructure.History;
 using Replica.Infrastructure.Paths;
+using Replica.Infrastructure.Portable;
 using Replica.Infrastructure.Recovery;
 using Replica.Infrastructure.Restore;
 using Replica.Infrastructure.Scanning;
@@ -38,8 +40,22 @@ public static class AppBootstrapper
         services.AddSingleton<IReplicaPathProvider, ReplicaPathProvider>();
         services.AddSingleton<IAppVersionService, AppVersionService>();
         services.AddSingleton<IReleaseVersionComparer, ReleaseVersionComparer>();
-        services.AddSingleton<IReleaseProvider, PlaceholderReleaseProvider>();
+        services.AddSingleton(new HttpClient
+        {
+            Timeout = TimeSpan.FromMinutes(15),
+        });
+        services.AddSingleton<IOfficialReleaseSource, GitHubReleaseSource>();
+        services.AddSingleton<IReleaseProvider, GitHubReleaseProvider>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
+        services.AddSingleton<IStorageVolumeProbe, WindowsStorageVolumeProbe>();
+        services.AddSingleton<IPortableWriteProbe, PortableWriteProbe>();
+        services.AddSingleton<ICloudFolderLocator, EnvironmentCloudFolderLocator>();
+        services.AddSingleton<IPortableStorageInspector, WindowsPortableStorageInspector>();
+        services.AddSingleton<IFileHashService, FileHashService>();
+        services.AddSingleton<IPortableSnapshotExporter, PortableSnapshotExporter>();
+        services.AddSingleton<IPortableSnapshotSettingsService, PortableSnapshotSettingsService>();
+        services.AddSingleton<IPreResetChecklistService, PreResetChecklistService>();
+        services.AddSingleton<IReplicaInstallerDownloadService, ReplicaInstallerDownloadService>();
         services.AddSingleton<ISnapshotSelectionEstimator, SnapshotSelectionEstimator>();
         services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
         services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
@@ -102,6 +118,7 @@ public static class AppBootstrapper
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IRecoveryDialogService, RecoveryDialogService>();
         services.AddSingleton<ISnapshotHistoryDialogService, SnapshotHistoryDialogService>();
+        services.AddSingleton<IPortableSnapshotDialogService, PortableSnapshotDialogService>();
         services.AddSingleton<ILocalizationService, ResourceLocalizationService>();
         services.AddSingleton<IThemeService, WpfThemeService>();
         services.AddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
@@ -112,6 +129,7 @@ public static class AppBootstrapper
         services.AddSingleton<RollbackViewModel>();
         services.AddSingleton<RecoveryWizardViewModel>();
         services.AddSingleton<SnapshotHistoryViewModel>();
+        services.AddSingleton<PortableSnapshotViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(

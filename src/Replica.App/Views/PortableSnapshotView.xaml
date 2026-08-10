@@ -1,0 +1,135 @@
+<UserControl x:Class="Replica.App.Views.PortableSnapshotView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Margin="0,18,0,0"
+            Padding="22"
+            Background="{DynamicResource CardBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="12">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsVisible}" Value="True">
+                        <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+        <StackPanel>
+            <TextBlock FontSize="20"
+                       FontWeight="SemiBold"
+                       Text="Portable Recovery Snapshot" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="검증된 .replica 파일을 USB, 외장 저장장치 또는 동기화 폴더에 원자적으로 복사합니다."
+                       TextWrapping="Wrap" />
+
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="원본 Snapshot" />
+                <TextBox Grid.Column="1" Margin="8,0" Text="{Binding SourceSnapshotPath, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Padding="14,8" Command="{Binding SelectSourceSnapshotCommand}" Content="선택" />
+            </Grid>
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="저장 폴더" />
+                <TextBox Grid.Column="1" Margin="8,0" Text="{Binding DestinationDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Padding="14,8" Command="{Binding SelectDestinationCommand}" Content="선택" />
+            </Grid>
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="안전한 파일명" />
+                <TextBox Grid.Column="1" Margin="8,0,0,0" Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+
+            <WrapPanel Margin="0,10,0,0">
+                <CheckBox Margin="0,0,14,0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding IsOtherSynchronizedFolder}"
+                          Content="기타 동기화 폴더" />
+                <CheckBox Margin="0,0,14,0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding IsExternalStorageConfirmed}"
+                          Content="외장 SSD/HDD" />
+                <Button Padding="14,8" Command="{Binding InspectDestinationCommand}" Content="저장 위치 검사" />
+                <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding ExportCommand}" Content="Snapshot 내보내기" />
+                <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding SaveDefaultDirectoryCommand}" Content="기본 폴더로 지정" />
+                <Button Margin="8,0,0,0" Padding="14,8" Command="{Binding TestSnapshotOpenCommand}" Content="Snapshot 열기 테스트" />
+            </WrapPanel>
+            <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding StorageSummary}" TextWrapping="Wrap" />
+            <ProgressBar Margin="0,8,0,0" Height="8" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" />
+            <TextBlock Margin="0,8,0,0" Text="{Binding StatusText}" TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="{Binding DefaultSnapshotDirectory, StringFormat=기본 Snapshot 폴더: {0}}" />
+
+            <Separator Margin="0,18,0,14" />
+            <TextBlock FontSize="17" FontWeight="SemiBold" Text="Replica 설치 파일 별도 보관" />
+            <TextBlock Margin="0,5,0,0"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="공식 HechoLP/Replica GitHub Release의 ReplicaSetup.exe만 다운로드하며 자동 실행하지 않습니다."
+                       TextWrapping="Wrap" />
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="Recovery 폴더" />
+                <TextBox Grid.Column="1" Margin="8,0" Text="{Binding InstallerDestinationDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Padding="14,8" Command="{Binding SelectInstallerDestinationCommand}" Content="선택" />
+            </Grid>
+            <WrapPanel Margin="0,8,0,0">
+                <CheckBox VerticalAlignment="Center" IsChecked="{Binding DownloadSpecificVersion}" Content="특정 버전" />
+                <TextBox Width="150" Margin="8,0,0,0" Text="{Binding SpecificVersionTag, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Margin="8,0,0,0"
+                        Padding="14,8"
+                        Command="{Binding DownloadInstallerCommand}"
+                        Content="사용자 승인 후 다운로드" />
+            </WrapPanel>
+
+            <Separator Margin="0,18,0,14" />
+            <TextBlock FontSize="17" FontWeight="SemiBold" Text="Windows 초기화 전 체크리스트" />
+            <WrapPanel Margin="0,8,0,0">
+                <CheckBox Margin="0,0,14,0" IsChecked="{Binding HasIndependentCopy}" Content="다른 위치에 복사함" />
+                <CheckBox Margin="0,0,14,0" IsChecked="{Binding IsEncrypted}" Content="암호화 Snapshot" />
+                <CheckBox IsChecked="{Binding InstallerStoredSeparately}" Content="ReplicaSetup.exe 별도 보관" />
+            </WrapPanel>
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="필요한 계정" />
+                <TextBox Grid.Column="1" Margin="8,0" Text="{Binding RequiredAccountsText, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Padding="14,8" Command="{Binding RefreshChecklistCommand}" Content="목록 갱신" />
+            </Grid>
+            <DataGrid Margin="0,10,0,0"
+                      MaxHeight="260"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      IsReadOnly="True"
+                      ItemsSource="{Binding ChecklistItems}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Width="70" Header="상태" Binding="{Binding Status}" />
+                    <DataGridTextColumn Width="180" Header="점검 항목" Binding="{Binding Title}" />
+                    <DataGridTextColumn Width="*" Header="안내" Binding="{Binding Guidance}" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </StackPanel>
+    </Border>
+</UserControl>

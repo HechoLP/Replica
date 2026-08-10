@@ -46,7 +46,8 @@ public sealed partial class MainViewModel : ObservableObject
         RestoreDryRunViewModel restoreDryRun,
         RollbackViewModel rollback,
         RecoveryWizardViewModel? recoveryWizard = null,
-        SnapshotHistoryViewModel? snapshotHistory = null)
+        SnapshotHistoryViewModel? snapshotHistory = null,
+        PortableSnapshotViewModel? portableSnapshot = null)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -62,6 +63,7 @@ public sealed partial class MainViewModel : ObservableObject
         Rollback = rollback;
         RecoveryWizard = recoveryWizard;
         SnapshotHistory = snapshotHistory;
+        PortableSnapshot = portableSnapshot;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -96,6 +98,8 @@ public sealed partial class MainViewModel : ObservableObject
     public RecoveryWizardViewModel? RecoveryWizard { get; }
 
     public SnapshotHistoryViewModel? SnapshotHistory { get; }
+
+    public PortableSnapshotViewModel? PortableSnapshot { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
@@ -157,9 +161,15 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void CreateRecoverySnapshot()
+    private async Task CreateRecoverySnapshotAsync(CancellationToken cancellationToken)
     {
-        ShowPlannedFeature("초기화 복구 Snapshot 만들기");
+        if (PortableSnapshot is null)
+        {
+            ShowPlannedFeature("Recovery Snapshot 휴대용 내보내기");
+            return;
+        }
+
+        await PortableSnapshot.ShowAsync(cancellationToken);
     }
 
     [RelayCommand]
