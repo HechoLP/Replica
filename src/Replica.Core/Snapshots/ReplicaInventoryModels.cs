@@ -68,7 +68,8 @@ public sealed record ReplicaArtifact(
     string ArchivePath,
     string DisplayName,
     long Size,
-    string Sha256);
+    string Sha256,
+    DateTimeOffset? LastWriteTimeUtc = null);
 
 public sealed record ReplicaChecksum(
     string EntryPath,

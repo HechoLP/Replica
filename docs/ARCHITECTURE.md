@@ -26,6 +26,7 @@ Dependencies point inward: App and Infrastructure depend on Core abstractions; C
 - **Bootstrap and shell:** dependency injection, navigation, dialogs, localization, theme, global exception handling, version information, and Windows compatibility checks.
 - **Inventory:** coordinates Windows, application, winget, registry, MSIX, environment, font, and plugin scanners. Partial failures become warnings rather than hidden omissions.
 - **Snapshot storage:** writes and validates atomic ZIP-based `.replica` containers, manifests, checksums, optional encrypted payloads, and explicit exclusions.
+- **Snapshot history:** indexes portable Snapshot metadata, comparison keys, audit summaries, and matching overrides in local SQLite without storing archive bodies or selected-file contents.
 - **Matching and diff:** maps inventory identities with confidence levels, compares versions and settings, and emits typed differences without changing the computer.
 - **Planning:** converts chosen differences and restore mode into a dependency DAG of typed actions. Cycles make the plan invalid.
 - **Execution:** dispatches allow-listed action handlers, reports progress, honors cancellation and timeouts, and never interprets arbitrary command text.
