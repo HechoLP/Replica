@@ -18,6 +18,11 @@ public sealed partial class RestoreDryRunViewModel : ObservableObject
     [ObservableProperty]
     private string _statusText = "Restore Plan을 생성하면 실행 전 검토 내용이 표시됩니다.";
 
+    [ObservableProperty]
+    private DiffRestoreMode _selectedMode = DiffRestoreMode.Safe;
+
+    public IReadOnlyList<DiffRestoreMode> Modes { get; } = Enum.GetValues<DiffRestoreMode>();
+
     public bool CanReview => _pendingPlan?.ReviewStatus == RestorePlanReviewStatus.PendingReview;
 
     public RestorePlan? ReviewedPlan { get; private set; }
@@ -26,12 +31,30 @@ public sealed partial class RestoreDryRunViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(plan);
         _pendingPlan = plan;
+        SelectedMode = plan.Mode;
         ReviewedPlan = null;
         Summary = CreateSummary(plan.DryRun);
         Actions = plan.Actions.Select(CreateRow).ToArray();
         StatusText = $"{plan.Mode} Restore Plan · 사용자 확인 전 · " +
             $"기본 선택 {plan.DryRun.SelectedActionCount:N0}개";
         OnPropertyChanged(nameof(CanReview));
+    }
+
+    [RelayCommand]
+    private void SelectMode(DiffRestoreMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            return;
+        }
+
+        SelectedMode = mode;
+        StatusText = mode switch
+        {
+            DiffRestoreMode.Safe => "Safe: Missing만 기본 선택하며 Extra·다운그레이드·제거를 자동 실행하지 않습니다.",
+            DiffRestoreMode.Recommended => "Recommended: 호환 가능한 업데이트와 설정·환경 병합을 제안합니다.",
+            _ => "Exact: 가능한 차이를 모두 표시하지만 제거·다운그레이드·고위험 작업은 수동입니다.",
+        };
     }
 
     [RelayCommand]

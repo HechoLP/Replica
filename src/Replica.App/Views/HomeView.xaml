@@ -1,0 +1,64 @@
+<UserControl x:Class="Replica.App.Views.HomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nav="clr-namespace:Replica.Core.Navigation;assembly=Replica.Core"
+             AutomationProperties.Name="Replica Home">
+    <ScrollViewer Padding="32,26" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="1120">
+            <Border Style="{DynamicResource PageCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="28" FontWeight="SemiBold" Text="내 Windows 환경을 안전하게 기록하고 복구하세요." TextWrapping="Wrap" />
+                        <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="15" Text="파일 전체가 아니라 프로그램·설정·개발환경과 명시적으로 선택한 사용자 파일만 다룹니다." TextWrapping="Wrap" />
+                        <TextBlock Margin="0,12,0,0" Foreground="{DynamicResource DangerBrush}" FontWeight="SemiBold" Text="시스템 변경은 Dry Run과 Restore Plan 최종 승인 전까지 실행되지 않습니다." />
+                    </StackPanel>
+                    <Button Grid.Column="1" Margin="24,0,0,0" AutomationProperties.Name="현재 PC 읽기 전용 스캔 시작" Command="{Binding ScanCurrentComputerCommand}" Content="현재 PC _스캔" Style="{DynamicResource PrimaryActionButtonStyle}" />
+                </Grid>
+            </Border>
+
+            <TextBlock Margin="0,4,0,12" AutomationProperties.HeadingLevel="Level2" FontSize="20" FontWeight="SemiBold" Text="Snapshot 만들기" />
+            <UniformGrid Columns="3" Margin="0,0,0,8">
+                <Button Margin="0,0,10,10" Padding="18" HorizontalContentAlignment="Left" AutomationProperties.Name="Lightweight Snapshot 만들기" Command="{Binding CreateLightweightSnapshotCommand}">
+                    <StackPanel><TextBlock FontWeight="SemiBold" Text="Lightweight Snapshot" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="프로그램과 설정 인벤토리" /></StackPanel>
+                </Button>
+                <Button Margin="0,0,10,10" Padding="18" HorizontalContentAlignment="Left" AutomationProperties.Name="Recovery Snapshot 만들기" Command="{Binding CreateRecoverySnapshotCommand}">
+                    <StackPanel><TextBlock FontWeight="SemiBold" Text="Recovery Snapshot" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="선택한 사용자 파일 포함" /></StackPanel>
+                </Button>
+                <Button Margin="0,0,0,10" Padding="18" HorizontalContentAlignment="Left" AutomationProperties.Name="Offline Recovery Pack 만들기" Command="{Binding CreateOfflineRecoveryPackCommand}">
+                    <StackPanel><TextBlock FontWeight="SemiBold" Text="Offline Recovery Pack" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="오프라인 복구 준비" /></StackPanel>
+                </Button>
+            </UniformGrid>
+
+            <TextBlock Margin="0,6,0,12" AutomationProperties.HeadingLevel="Level2" FontSize="20" FontWeight="SemiBold" Text="복구 및 비교" />
+            <WrapPanel>
+                <Button AutomationProperties.Name="Snapshot 열기" Command="{Binding OpenSnapshotCommand}" Content="Snapshot _열기" Style="{DynamicResource ActionButtonStyle}" />
+                <Button AutomationProperties.Name="초기화 후 복구" Command="{Binding RestoreAfterResetCommand}" Content="초기화 후 _복구" Style="{DynamicResource PrimaryActionButtonStyle}" />
+                <Button AutomationProperties.Name="최근 Snapshot 기록" Command="{Binding ShowSnapshotHistoryCommand}" Content="최근 Snapshot" Style="{DynamicResource ActionButtonStyle}" />
+                <Button AutomationProperties.Name="업데이트 확인" Command="{Binding CheckForUpdatesCommand}" Content="업데이트 _확인" Style="{DynamicResource ActionButtonStyle}" />
+            </WrapPanel>
+
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{DynamicResource PageCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="최근 Snapshot" />
+                        <TextBlock Margin="0,8,0,0" FontSize="24" Foreground="{DynamicResource AccentBrush}" Text="{Binding SnapshotHistory.StatusText, FallbackValue=기록을 불러오세요}" TextWrapping="Wrap" />
+                        <Button Margin="0,14,0,0" Width="Auto" HorizontalAlignment="Left" Padding="14,8" Command="{Binding ShowSnapshotHistoryCommand}" Content="History 열기" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{DynamicResource PageCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="환경 일치율" />
+                        <TextBlock Margin="0,8,0,0" FontSize="24" Foreground="{DynamicResource AccentBrush}" Text="{Binding DiffViewer.OverallScoreText}" />
+                        <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding DiffViewer.CoverageText}" TextWrapping="Wrap" />
+                        <Button Margin="0,14,0,0" Width="Auto" HorizontalAlignment="Left" Padding="14,8" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Comparison}" Content="Comparison 열기" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

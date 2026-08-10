@@ -3,4 +3,19 @@
                     xmlns:system="clr-namespace:System;assembly=System.Runtime">
     <system:String x:Key="ProductName">Replica</system:String>
     <system:String x:Key="ProductTagline">Clone your Windows setup, not your files.</system:String>
+    <system:String x:Key="ProductSubtitle">Windows 환경 복구</system:String>
+    <system:String x:Key="NavHome">_홈</system:String>
+    <system:String x:Key="NavScan">PC _스캔</system:String>
+    <system:String x:Key="NavSnapshotBuilder">S_napshot Builder</system:String>
+    <system:String x:Key="NavComparison">_Comparison</system:String>
+    <system:String x:Key="NavDiffViewer">_Diff Viewer</system:String>
+    <system:String x:Key="NavRestorePlan">Restore _Plan</system:String>
+    <system:String x:Key="NavRecovery">초기화 후 _복구</system:String>
+    <system:String x:Key="NavExecution">_Execution</system:String>
+    <system:String x:Key="NavResult">_Result</system:String>
+    <system:String x:Key="NavHistory">_History</system:String>
+    <system:String x:Key="NavUpdate">_업데이트</system:String>
+    <system:String x:Key="NavSettings">_설정</system:String>
+    <system:String x:Key="NavAbout">_정보</system:String>
+    <system:String x:Key="SafetyBadge">검토 후 실행 · 자동 복원 안 함</system:String>
 </ResourceDictionary>

@@ -10,6 +10,13 @@
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF4338CA" />
     <SolidColorBrush x:Key="BadgeBackgroundBrush" Color="#FFEEF2FF" />
     <SolidColorBrush x:Key="BorderBrush" Color="#FFE4E7EC" />
+    <SolidColorBrush x:Key="NavigationBackgroundBrush" Color="#FF111827" />
+    <SolidColorBrush x:Key="NavigationTextBrush" Color="#FFE5E7EB" />
+    <SolidColorBrush x:Key="NavigationSelectedBrush" Color="#FF312E81" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#FF067647" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#FFB54708" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FFB42318" />
+    <SolidColorBrush x:Key="FocusBrush" Color="#FF2563EB" />
 
     <Style x:Key="ActionButtonStyle" TargetType="Button">
         <Setter Property="Width" Value="276" />
@@ -31,5 +38,43 @@
         <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style x:Key="SecondaryActionButtonStyle" BasedOn="{StaticResource ActionButtonStyle}" TargetType="Button">
+        <Setter Property="Width" Value="Auto" />
+        <Setter Property="Height" Value="Auto" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Margin" Value="0,0,8,8" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellNavigationButtonStyle" TargetType="Button">
+        <Setter Property="Margin" Value="8,2" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource NavigationTextBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+                <Setter Property="BorderThickness" Value="2" />
+                <Setter Property="Padding" Value="12,8" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource NavigationSelectedBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="PageCardStyle" TargetType="Border">
+        <Setter Property="Padding" Value="20" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
     </Style>
 </ResourceDictionary>

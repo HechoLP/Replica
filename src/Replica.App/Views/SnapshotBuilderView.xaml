@@ -1,0 +1,108 @@
+<UserControl x:Class="Replica.App.Views.SnapshotBuilderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:snapshots="clr-namespace:Replica.Core.Snapshots;assembly=Replica.Core"
+             xmlns:views="clr-namespace:Replica.App.Views"
+             AutomationProperties.Name="Snapshot Builder">
+    <ScrollViewer Padding="32,26" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="1120">
+            <Border Style="{DynamicResource PageCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="260" /></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="20" FontWeight="SemiBold" Text="Snapshot 종류" />
+                        <TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="Recovery 계열은 사용자가 직접 선택한 폴더만 포함합니다." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="현재 선택" />
+                        <TextBlock FontWeight="SemiBold" Text="{Binding SnapshotType}" />
+                        <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="Home에서 종류를 선택할 수 있습니다." />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Style="{DynamicResource PageCardStyle}">
+                <StackPanel>
+                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="포함 카테고리" />
+                    <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding Categories}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Width="310" Margin="0,0,14,12" IsChecked="{Binding IsSelected}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                        <TextBlock Margin="0,3,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding Description}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{DynamicResource PageCardStyle}">
+                <StackPanel>
+                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="사용자 폴더 선택" />
+                    <TextBlock Margin="0,5,0,10" Foreground="{DynamicResource SecondaryTextBrush}" Text="선택하지 않은 폴더는 절대 포함하지 않습니다. AppData 전체 같은 광범위한 선택은 거부됩니다." TextWrapping="Wrap" />
+                    <WrapPanel>
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding AddSelectedFolderCommand}" CommandParameter="{x:Static snapshots:ReplicaSelectedFolderCategory.Desktop}" Content="Desktop 선택" />
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding AddSelectedFolderCommand}" CommandParameter="{x:Static snapshots:ReplicaSelectedFolderCategory.Documents}" Content="Documents 선택" />
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding AddSelectedFolderCommand}" CommandParameter="{x:Static snapshots:ReplicaSelectedFolderCategory.Project}" Content="프로젝트 폴더 선택" />
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding AddSelectedFolderCommand}" CommandParameter="{x:Static snapshots:ReplicaSelectedFolderCategory.GameSave}" Content="게임 세이브 선택" />
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding AddSelectedFolderCommand}" CommandParameter="{x:Static snapshots:ReplicaSelectedFolderCategory.ApplicationSettings}" Content="프로그램 설정 선택" />
+                        <Button Padding="12,8" Margin="0,0,8,8" Command="{Binding RemoveSelectedFolderCommand}" Content="선택 제거" />
+                    </WrapPanel>
+                    <DataGrid Margin="0,8,0,0" MaxHeight="220" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding SelectedFolders}" SelectedItem="{Binding SelectedFolder}" AutomationProperties.Name="선택한 사용자 폴더">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="130" Header="종류" Binding="{Binding CategoryName}" />
+                            <DataGridTextColumn Width="*" Header="원본 폴더" Binding="{Binding SourcePath}" />
+                            <DataGridTextColumn Width="260" Header="Snapshot 내부 경로" Binding="{Binding ArchivePath}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{DynamicResource PageCardStyle}">
+                    <StackPanel>
+                        <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="민감 데이터 제외 목록" />
+                        <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding SensitiveExclusions}">
+                            <ItemsControl.ItemTemplate><DataTemplate><TextBlock Margin="0,0,0,6" Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{DynamicResource PageCardStyle}">
+                    <StackPanel>
+                        <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="암호화 및 저장 위치" />
+                        <CheckBox Margin="0,10,0,0" AutomationProperties.Name="AES-GCM Snapshot 암호화" IsChecked="{Binding IsEncryptionEnabled}" Content="AES-GCM 암호화 사용" />
+                        <TextBlock Margin="0,5,0,10" Foreground="{DynamicResource WarningBrush}" Text="비밀번호는 저장·로그 기록되지 않으며 생성할 때 별도로 입력합니다." TextWrapping="Wrap" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Margin="8,0,0,0" Padding="12,7" Command="{Binding SelectDestinationCommand}" Content="저장 위치 선택" />
+                            <TextBox AutomationProperties.Name="Snapshot 저장 경로" Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Style="{DynamicResource PageCardStyle}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="{Binding EstimatedSizeText}" />
+                    <ProgressBar Margin="0,10,0,0" Height="10" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" />
+                    <TextBlock Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite" Text="{Binding StatusText}" TextWrapping="Wrap" />
+                    <CheckBox Margin="0,14,0,0" AutomationProperties.Name="Snapshot 생성 최종 승인" IsChecked="{Binding IsFinalApprovalChecked}">
+                        <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" Text="포함 범위·제외 목록·저장 위치를 검토했으며 Snapshot 파일 생성을 승인합니다." TextWrapping="Wrap" />
+                    </CheckBox>
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding EstimateCommand}" Content="예상 용량 계산" />
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding CreateCommand}" Content="Snapshot 생성" />
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding CreateCancelCommand}" Content="생성 취소" />
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DataContext.ShowPortableExportCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="외부 저장장치로 내보내기" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <views:PortableSnapshotView DataContext="{Binding DataContext.PortableSnapshot, RelativeSource={RelativeSource AncestorType=Window}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

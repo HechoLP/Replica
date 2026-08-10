@@ -26,10 +26,11 @@ public sealed class WpfThemeService : IThemeService
             application.Resources.MergedDictionaries.Remove(existingTheme);
         }
 
+        string themeResource = SystemParameters.HighContrast ? "HighContrast" : theme.ToString();
         application.Resources.MergedDictionaries.Add(
             new ResourceDictionary
             {
-                Source = new Uri($"/Replica;component/Themes/{theme}.xaml", UriKind.Relative),
+                Source = new Uri($"/Replica;component/Themes/{themeResource}.xaml", UriKind.Relative),
             });
 
         CurrentTheme = theme;

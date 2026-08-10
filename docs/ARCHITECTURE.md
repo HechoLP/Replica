@@ -24,6 +24,7 @@ Dependencies point inward: App and Infrastructure depend on Core abstractions; C
 ## Major subsystems
 
 - **Bootstrap and shell:** dependency injection, navigation, dialogs, localization, theme, global exception handling, version information, and Windows compatibility checks.
+- **WPF workspace:** a single unelevated Shell hosts dedicated Home, Scan, Snapshot Builder, Comparison, Diff, Restore Plan, Recovery, Execution, Result, History, Settings, About, and Update views. View models own state and commands; code-behind only initializes controls.
 - **Inventory:** coordinates Windows, application, winget, registry, MSIX, environment, font, and plugin scanners. Partial failures become warnings rather than hidden omissions.
 - **Snapshot storage:** writes and validates atomic ZIP-based `.replica` containers, manifests, checksums, optional encrypted payloads, and explicit exclusions.
 - **Portable export:** inspects user-selected removable, fixed, network, and synchronized destinations, copies through a sibling temporary extension, verifies source/destination SHA-256, and never overwrites a collision.

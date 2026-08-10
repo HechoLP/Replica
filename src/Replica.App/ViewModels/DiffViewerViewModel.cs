@@ -5,6 +5,8 @@ namespace Replica.App.ViewModels;
 
 public sealed partial class DiffViewerViewModel : ObservableObject
 {
+    private IReadOnlyList<DiffItemRowViewModel> allItems = [];
+
     [ObservableProperty]
     private IReadOnlyList<DiffScoreRowViewModel> _categoryScores = [];
 
@@ -15,10 +17,31 @@ public sealed partial class DiffViewerViewModel : ObservableObject
     private IReadOnlyList<DiffItemRowViewModel> _items = [];
 
     [ObservableProperty]
+    private IReadOnlyList<DiffTreeGroupViewModel> _treeGroups = [];
+
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    private string _selectedFilter = "전체";
+
+    [ObservableProperty]
     private string _overallScoreText = "전체 환경 일치율: 비교 전";
 
     [ObservableProperty]
     private string _statusText = "Snapshot과 현재 PC를 비교하면 차이가 여기에 표시됩니다.";
+
+    public IReadOnlyList<string> Filters { get; } =
+    [
+        "전체",
+        "누락",
+        "버전 차이",
+        "설정 차이",
+        "파일 차이",
+        "추가",
+        "지원 안 함",
+        "수동 작업 필요",
+    ];
 
     public void Display(EnvironmentDiffResult result)
     {
@@ -38,7 +61,7 @@ public sealed partial class DiffViewerViewModel : ObservableObject
                 category.ComparableItemCount,
                 category.ExcludedItemCount))
             .ToArray();
-        Items = result.Items
+        allItems = result.Items
             .Select(item => new DiffItemRowViewModel(
                 GetTypeName(item.Type),
                 GetAreaName(item.Area),
@@ -52,11 +75,61 @@ public sealed partial class DiffViewerViewModel : ObservableObject
                 item.RequiresAdministrator ? "필요" : "불필요",
                 item.RequiresRestart ? "필요" : "불필요",
                 $"{item.SimilarityPercent}%",
-                item.ReasonCode))
+                item.ReasonCode,
+                GetRecommendation(item)))
             .ToArray();
+        ApplyFilter();
         StatusText = result.Items.Count == 0
             ? "비교 항목이 없습니다."
             : $"{result.Items.Count:N0}개 비교 항목을 검토할 수 있습니다.";
+    }
+
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    partial void OnSelectedFilterChanged(string value) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        IEnumerable<DiffItemRowViewModel> filtered = allItems;
+        if (!SelectedFilter.Equals("전체", StringComparison.Ordinal))
+        {
+            filtered = filtered.Where(item => item.Type.Equals(SelectedFilter, StringComparison.Ordinal));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            filtered = filtered.Where(item =>
+                item.Name.Contains(SearchText, StringComparison.CurrentCultureIgnoreCase) ||
+                item.Area.Contains(SearchText, StringComparison.CurrentCultureIgnoreCase) ||
+                item.Source.Contains(SearchText, StringComparison.CurrentCultureIgnoreCase) ||
+                item.Target.Contains(SearchText, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        Items = filtered.ToArray();
+        TreeGroups = Items
+            .GroupBy(item => item.Area, StringComparer.CurrentCulture)
+            .Select(group => new DiffTreeGroupViewModel(
+                group.Key,
+                group.Select(item => new DiffTreeItemViewModel(
+                    item.Name,
+                    item.Type,
+                    item.Risk)).ToArray()))
+            .ToArray();
+    }
+
+    private static string GetRecommendation(DiffItem item)
+    {
+        if (item.PreserveTarget)
+        {
+            return "현재 PC 항목 유지";
+        }
+
+        if (item.Type is DiffType.Unsupported or DiffType.ManualActionRequired)
+        {
+            return "수동 작업 검토";
+        }
+
+        return item.CanAutomaticallyRestore ? "Restore Plan에 추가 가능" : "사용자 선택 필요";
     }
 
     private static string GetTypeName(DiffType type)
@@ -141,4 +214,14 @@ public sealed record DiffItemRowViewModel(
     string Administrator,
     string Restart,
     string Similarity,
-    string Reason);
+    string Reason,
+    string Recommendation)
+{
+    public bool IsSelected { get; set; } = true;
+}
+
+public sealed record DiffTreeGroupViewModel(
+    string Name,
+    IReadOnlyList<DiffTreeItemViewModel> Items);
+
+public sealed record DiffTreeItemViewModel(string Name, string Type, string Risk);
