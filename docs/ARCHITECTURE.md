@@ -26,6 +26,7 @@ Dependencies point inward: App and Infrastructure depend on Core abstractions; C
 - **Bootstrap and shell:** dependency injection, navigation, dialogs, localization, theme, global exception handling, version information, and Windows compatibility checks.
 - **Inventory:** coordinates Windows, application, winget, registry, MSIX, environment, font, and plugin scanners. Partial failures become warnings rather than hidden omissions.
 - **Snapshot storage:** writes and validates atomic ZIP-based `.replica` containers, manifests, checksums, optional encrypted payloads, and explicit exclusions.
+- **Portable export:** inspects user-selected removable, fixed, network, and synchronized destinations, copies through a sibling temporary extension, verifies source/destination SHA-256, and never overwrites a collision.
 - **Snapshot history:** indexes portable Snapshot metadata, comparison keys, audit summaries, and matching overrides in local SQLite without storing archive bodies or selected-file contents.
 - **Matching and diff:** maps inventory identities with confidence levels, compares versions and settings, and emits typed differences without changing the computer.
 - **Planning:** converts chosen differences and restore mode into a dependency DAG of typed actions. Cycles make the plan invalid.
@@ -34,6 +35,7 @@ Dependencies point inward: App and Infrastructure depend on Core abstractions; C
 - **Rollback:** journals original state before every supported mutation and restores only changes made by Replica.
 - **Verification:** rescans relevant targets and records action outcomes, warnings, restarts, and manual follow-up.
 - **Updates:** queries GitHub Releases metadata, compares versions, verifies asset integrity/signing status, and downloads only with user consent.
+- **Recovery installer retention:** downloads only the exact official `HechoLP/Replica` release asset after approval, stores it outside the Snapshot, verifies size and available SHA-256 metadata, and never executes it.
 
 ## End-to-end data flow
 

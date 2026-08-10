@@ -27,6 +27,8 @@ Extraction uses a new private temporary directory with restrictive access. The r
 
 Optional password encryption uses an authenticated construction: AES-GCM with a fresh random nonce for every encrypted item and a key derived with PBKDF2-HMAC-SHA256, a fresh random salt, and a versioned, reviewable work factor. The password is neither stored nor logged. Authentication failure returns one generic decryption error. Encryption metadata is authenticated and designed for future parameter upgrades. Encryption does not establish who created the snapshot.
 
+Portable export treats removable drives and synchronized folders as failure-prone destinations. Replica rejects reparse points, unsafe leaf names, insufficient space, FAT32 single-file overflow, and existing final names. It copies to a unique sibling temporary extension, flushes it, compares source and destination SHA-256 and size, and only then assigns the final `.replica` name. Synchronization completion remains a user-visible check because a local hash cannot prove that a cloud provider uploaded the bytes.
+
 ## Restore execution
 
 All restores begin as a typed plan. There is no general `ShellCommand` action. Handlers construct explicit executable paths and argument lists for allow-listed tools, validate package identifiers and destination paths, enforce timeouts/cancellation/output limits, and verify outcomes with a rescan.
@@ -44,6 +46,8 @@ Application installation is not automatically reversed by uninstalling it. The j
 ## Release and update security
 
 Official downloads come from repository releases, use HTTPS, and are matched by expected owner/repository and asset name. Replica verifies SHA-256 and shows Authenticode status. Until code signing exists, the UI and release notes label the installer Unsigned.
+
+The optional before-reset installer copy accepts only `ReplicaSetup.exe` from published `HechoLP/Replica` GitHub Releases after explicit approval. It is stored beside recovery material rather than inside a Snapshot, streams to a temporary name with bounded declared size, verifies GitHub's SHA-256 digest when present, and is never launched automatically. A missing release digest is shown as unavailable rather than treated as verification.
 
 CI uses least-privilege tokens, pinned actions where possible, protected release environments for secrets, and immutable version tags. Dependency and installer changes require review. A failed test, packaging check, checksum step, or signing step prevents publication.
 

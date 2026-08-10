@@ -7,7 +7,9 @@
 3. **Choose a snapshot:** Lightweight for inventory, Recovery for selected files/settings, or Offline Recovery Pack for exceptional offline installer needs.
 4. **Select data:** The user explicitly chooses folders and files. Replica estimates size, flags risky selections, and records exclusions.
 5. **Create:** Replica builds a temporary archive, hashes content, validates the completed archive, and atomically moves it to a new destination. Existing snapshots are never silently overwritten.
-6. **Protect and copy:** The user optionally encrypts supported payloads and stores the file on selected removable or cloud-synchronized storage. Replica recommends retaining an independent copy.
+6. **Protect and copy:** The user optionally encrypts supported payloads and stores the file on selected removable or cloud-synchronized storage. Replica checks write access, free space, file-system limits, collision safety, and the copied SHA-256 before finalizing the name. It recommends retaining an independent copy.
+7. **Pre-reset check:** Replica opens and validates the exported copy, shows external/independent storage status, reminds the user that encryption passwords cannot be recovered, lists post-reset accounts, and explains how to obtain `ReplicaSetup.exe`.
+8. **Optional installer retention:** With separate approval, Replica can store the latest stable or an explicitly selected official GitHub Release `ReplicaSetup.exe` outside the Snapshot. It verifies the declared size and available release hash and never executes the installer automatically.
 
 ## After reinstalling Windows
 
