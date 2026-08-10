@@ -3,9 +3,11 @@ using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Replica.App.Bootstrap;
 using Replica.App.Services;
+using Replica.App.ViewModels;
 using Replica.Core.Execution;
 using Replica.Core.Recovery;
 using Replica.Core.Services;
+using Replica.Core.Snapshots;
 using Replica.Infrastructure.Restore;
 
 namespace Replica.App;
@@ -48,8 +50,15 @@ public partial class App : Application
             MainWindow.Show();
             if (RecoveryResumeArgumentsParser.TryParse(e.Args, out string? recoverySessionId))
             {
-                _ = _services.GetRequiredService<Replica.App.ViewModels.RecoveryWizardViewModel>()
+                _ = _services.GetRequiredService<RecoveryWizardViewModel>()
                     .LoadResumeAsync(recoverySessionId!);
+            }
+            else if (SnapshotOpenArgumentsParser.TryParse(e.Args, out string? snapshotPath))
+            {
+                _services.GetRequiredService<INavigationService>()
+                    .Navigate(Replica.Core.Navigation.NavigationDestination.SnapshotHistory);
+                _ = _services.GetRequiredService<SnapshotHistoryViewModel>()
+                    .OpenFromCommandLineAsync(snapshotPath!);
             }
         }
         catch (Exception exception)

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -46,6 +46,13 @@ jobs:
 
       - name: Test
         run: dotnet test Replica.sln -c Release --no-build --logger "trx;LogFilePrefix=replica" --results-directory TestResults
+
+      - name: Install Inno Setup 6.7.1
+        run: choco install innosetup --version=6.7.1 --yes --no-progress
+
+      - name: Verify Windows installer packaging
+        shell: powershell
+        run: ./scripts/build-release.ps1 -Version 0.1.0-alpha.1
 
       - name: Upload test results
         if: always()

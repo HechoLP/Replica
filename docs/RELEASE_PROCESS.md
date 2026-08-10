@@ -20,6 +20,8 @@ Application, installer, manifest, and tag versions must agree. Release tags poin
 
 Create and push the approved annotated version tag. The tag workflow restores and tests from scratch, publishes self-contained `win-x64` output, creates `ReplicaSetup.exe` with Inno Setup, validates packaging, applies Authenticode when configured, calculates SHA-256, and prepares release notes.
 
+The local packaging entry point is `scripts/build-release.ps1`; detailed prerequisites, outputs, unsigned-package behavior, and clean-VM checks are documented in `WINDOWS_INSTALLER.md`.
+
 Only after all jobs succeed does the workflow create the GitHub Release and upload the installer and checksum material. It marks the release as prerelease based on the version. A failed workflow leaves no official partial release; maintainers investigate and use a new version if an immutable published tag or asset was exposed.
 
 ## Verification after publication

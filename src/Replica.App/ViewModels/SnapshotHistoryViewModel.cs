@@ -70,6 +70,48 @@ public sealed partial class SnapshotHistoryViewModel : ObservableObject
         await RefreshCoreAsync(cancellationToken);
     }
 
+    public async Task OpenFromCommandLineAsync(
+        string snapshotPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
+        IsVisible = true;
+
+        await RunAsync(async () =>
+        {
+            try
+            {
+                await _service.AddSnapshotAsync(
+                    snapshotPath,
+                    ReadOnlyMemory<char>.Empty,
+                    null,
+                    cancellationToken);
+            }
+            catch (ReplicaSnapshotDecryptionException)
+            {
+                char[]? password = _recoveryDialogs.RequestPassword(
+                    "암호화 Snapshot",
+                    "Snapshot을 열려면 비밀번호를 입력하세요. 비밀번호는 저장되지 않습니다.");
+                if (password is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await _service.AddSnapshotAsync(snapshotPath, password, null, cancellationToken);
+                }
+                finally
+                {
+                    Array.Clear(password);
+                }
+            }
+
+            await LoadRowsAsync(cancellationToken);
+            StatusText = "Snapshot을 검증하고 기록에 추가했습니다.";
+        });
+    }
+
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task RefreshAsync(CancellationToken cancellationToken) => RefreshCoreAsync(cancellationToken);
 

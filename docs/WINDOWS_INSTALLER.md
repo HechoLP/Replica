@@ -1,0 +1,38 @@
+# Windows installer
+
+Replica is distributed as one user download, `ReplicaSetup.exe`, through the official `HechoLP/Replica` GitHub Releases page. The versioned local build output is `ReplicaSetup-<Version>.exe`; the reviewed release pipeline publishes those same bytes under the canonical download name.
+
+## Build
+
+Prerequisites are the .NET 10 SDK and Inno Setup 6. From the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.1.0-alpha.1
+```
+
+The script cleans only release directories below `artifacts`, restores, verifies formatting, builds, tests, publishes a self-contained single-file `win-x64` WPF executable, compiles the installer, validates its contract, and writes SHA-256 material. The only release outputs are:
+
+```text
+artifacts/release/
+  ReplicaSetup-<Version>.exe
+  ReplicaSetup-<Version>.exe.sha256
+```
+
+Pass `-RunInstallTests` only on a clean Windows test account or disposable VM. This opt-in smoke test installs Replica, launches the exact installed executable, verifies the `.replica` association, performs an in-place upgrade, uninstalls, and proves that user data remains. Automated xUnit tests never install software or change the registry.
+
+Snapshot creation/opening is covered by snapshot round-trip tests and the file-association argument/indexing tests. A release candidate must additionally complete the GUI checklist in a clean Windows 11 VM.
+
+## Installation behavior
+
+- Replica installs per user to `%LOCALAPPDATA%\Programs\Replica`; no administrator elevation is requested by setup.
+- The installed product exposes only `Replica.exe`. No helper, service, runtime installer, or plugin manager is installed; built-in plugins are compiled into Replica.
+- Setup creates a Start menu shortcut, offers an unchecked desktop shortcut, registers `.replica`, appears in Add/Remove Programs, supports in-place upgrades, and can launch Replica after setup.
+- Silent and default interactive uninstall preserve `%LOCALAPPDATA%\Replica`, including snapshots, history, settings, and rollback records. Full data deletion is offered only during interactive uninstall and requires two explicit confirmations.
+
+## Signing
+
+Until a production Authenticode certificate is configured, setup is plainly marked **Unsigned** in its pre-install notice and metadata. The build never creates a test certificate or presents an unsigned package as signed. Verify the SHA-256 file before testing an unsigned installer.
+
+## Release verification checklist
+
+In a clean supported Windows 11 VM, verify installation, launch, lightweight Snapshot creation, Snapshot opening from Explorer, upgrade, uninstall, `.replica` association, user-data retention, displayed version, installer SHA-256, and the expected Authenticode state. Do not publish if any check fails.

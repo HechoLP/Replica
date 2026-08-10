@@ -16,8 +16,16 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyName>Replica</AssemblyName>
     <RootNamespace>Replica.App</RootNamespace>
+    <Company>HechoLP</Company>
+    <Description>Replica Windows migration and recovery application</Description>
   </PropertyGroup>
 
 </Project>
