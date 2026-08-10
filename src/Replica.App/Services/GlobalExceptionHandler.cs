@@ -21,7 +21,9 @@ public sealed class GlobalExceptionHandler : IGlobalExceptionHandler
         ArgumentNullException.ThrowIfNull(exception);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
 
-        _logger.LogError(exception, "Unhandled Replica exception from {ExceptionSource}.", source);
+        _logger.LogError(
+            "Unhandled Replica exception of type {ExceptionType}.",
+            exception.GetType().FullName ?? exception.GetType().Name);
         _dialogService.ShowMessage(
             "Replica",
             "예기치 않은 문제가 발생했습니다. 작업은 중단되었으며 시스템 변경은 수행되지 않았습니다.");

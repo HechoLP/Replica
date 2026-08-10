@@ -209,6 +209,30 @@ public sealed class RecoveryWizardServiceTests
         Assert.Equal(expected ? id : null, sessionId);
     }
 
+    [Theory]
+    [InlineData("relative\\source", "C:\\Recovery")]
+    [InlineData("C:\\Source", "..\\escape")]
+    [InlineData("C:\\Source", "C:\\Target\0escape")]
+    public async Task AnalyzeAsync_RejectsMaliciousRecoveryMappings(string source, string target)
+    {
+        TestContext context = new();
+        RecoveryWizardSession started = await context.StartAsync();
+        RecoveryPathMapping mapping = new(
+            source,
+            target,
+            RecoveryPathMappingScope.SelectedFolder,
+            RestoreFileConflictBehavior.RenameAndKeepBoth,
+            1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => context.Service.AnalyzeAsync(
+            started.SessionId,
+            [mapping],
+            ReadOnlyMemory<char>.Empty,
+            default));
+
+        Assert.Empty(context.Runtime.LastMappings);
+    }
+
     private static RestoreActionExecutionResult Result(
         string id,
         RestoreExecutionState state) => new(

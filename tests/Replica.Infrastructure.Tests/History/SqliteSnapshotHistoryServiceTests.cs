@@ -40,6 +40,20 @@ public sealed class SqliteSnapshotHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Initialize_RejectsCorruptDatabaseWithoutReplacingIt()
+    {
+        TestHistoryContext context = CreateContext();
+        byte[] corrupt = "not-a-sqlite-database"u8.ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(context.Paths.DatabasePath)!);
+        await File.WriteAllBytesAsync(context.Paths.DatabasePath, corrupt);
+
+        await Assert.ThrowsAsync<SqliteException>(() => context.Service.InitializeAsync(default));
+        SqliteConnection.ClearAllPools();
+
+        Assert.Equal(corrupt, await File.ReadAllBytesAsync(context.Paths.DatabasePath));
+    }
+
+    [Fact]
     public async Task AddSnapshot_StoresMetadataAndComparisonIndexButNotArchiveBody()
     {
         TestHistoryContext context = CreateContext();

@@ -51,6 +51,22 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    [Trait("Category", "Performance")]
+    public async Task ScanCurrentComputerCommand_DoesNotBlockWhileScannerIsAwaitingIo()
+    {
+        BlockingEnvironmentScanner scanner = new();
+        MainViewModel viewModel = CreateViewModel(out _, out _, environmentScanner: scanner);
+
+        Task execution = viewModel.ScanCurrentComputerCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsScanning);
+        Assert.False(execution.IsCompleted);
+        scanner.Complete();
+        await execution;
+        Assert.False(viewModel.IsScanning);
+    }
+
+    [Fact]
     public void NavigationCommands_UpdateNavigationService()
     {
         MainViewModel viewModel = CreateViewModel(out _, out FakeNavigationService navigation);
@@ -75,7 +91,8 @@ public sealed class MainViewModelTests
     private static MainViewModel CreateViewModel(
         out FakeDialogService dialog,
         out FakeNavigationService navigation,
-        IUpdateCheckService? updateService = null)
+        IUpdateCheckService? updateService = null,
+        IEnvironmentScanner? environmentScanner = null)
     {
         dialog = new FakeDialogService();
         navigation = new FakeNavigationService();
@@ -86,7 +103,7 @@ public sealed class MainViewModelTests
             navigation,
             updateService ?? new FakeUpdateCheckService(),
             new FakeWindowsCompatibilityService(),
-            new FakeEnvironmentScanner(),
+            environmentScanner ?? new FakeEnvironmentScanner(),
             new DiffViewerViewModel(),
             new RestoreDryRunViewModel(),
             new RollbackViewModel(new FakeRollbackService()));
@@ -195,6 +212,29 @@ public sealed class MainViewModelTests
                     [],
                     [new ScanWarning("Test", "Partial", "Partial test warning.")],
                     new EnvironmentScanSummary(3, 2, 1, 4, 1, 1)));
+        }
+    }
+
+    private sealed class BlockingEnvironmentScanner : IEnvironmentScanner
+    {
+        private readonly TaskCompletionSource<EnvironmentScanResult> completion = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<EnvironmentScanResult> ScanAsync(
+            IProgress<EnvironmentScanProgress>? progress,
+            CancellationToken cancellationToken) => completion.Task.WaitAsync(cancellationToken);
+
+        public void Complete()
+        {
+            completion.SetResult(new EnvironmentScanResult(
+                null,
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                new EnvironmentScanSummary(0, 0, 0, 0, 0, 0)));
         }
     }
 

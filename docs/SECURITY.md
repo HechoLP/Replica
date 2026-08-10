@@ -56,3 +56,5 @@ CI uses least-privilege tokens, pinned actions where possible, protected release
 ## Vulnerability reporting
 
 Do not place exploitable details or real sensitive samples in public issues. Until a private reporting channel is configured, contact the repository owner through a private GitHub profile channel and provide only the minimum reproduction data. The project should enable GitHub private vulnerability reporting before its first public binary release.
+
+The executable regression matrix and local verification commands are documented in [SECURITY_TESTING.md](SECURITY_TESTING.md).

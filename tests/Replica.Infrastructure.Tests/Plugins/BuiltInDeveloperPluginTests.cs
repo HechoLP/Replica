@@ -283,6 +283,23 @@ public sealed class BuiltInDeveloperPluginTests
         Assert.All(plugins, plugin => Assert.Equal("1.0.0", plugin.Version));
     }
 
+    [Theory]
+    [InlineData("../escape.json")]
+    [InlineData("C:/absolute.json")]
+    [InlineData("settings\\nested.json")]
+    public void ToReplicaSnapshot_RejectsInvalidPluginArtifactPath(string logicalPath)
+    {
+        PluginSnapshot snapshot = new(
+            "built-in.test",
+            "1.0.0",
+            new Dictionary<string, string>(),
+            [new PluginCapturedFile(logicalPath, "safe content")],
+            [],
+            []);
+
+        Assert.Throws<InvalidDataException>(snapshot.ToReplicaSnapshot);
+    }
+
     private static IBuiltInPlugin CreatePlugin(string fixtureName)
     {
         return fixtureName switch

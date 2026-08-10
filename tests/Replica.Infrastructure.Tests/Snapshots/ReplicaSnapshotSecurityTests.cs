@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text;
+using System.Text.Json.Nodes;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
 using Replica.Infrastructure.Snapshots;
@@ -38,6 +40,116 @@ public sealed class ReplicaSnapshotSecurityTests
                 new ReplicaSnapshotReadRequest(destination),
                 progress: null,
                 CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeterministicFuzzCorpusFailsClosed()
+    {
+        using SnapshotTestContext context = new();
+        for (int seed = 0; seed < 32; seed++)
+        {
+            string destination = Path.Combine(context.RootPath, $"fuzz-{seed}.replica");
+            Random random = new(seed);
+            byte[] payload = new byte[random.Next(0, 4096)];
+            random.NextBytes(payload);
+            await File.WriteAllBytesAsync(destination, payload);
+
+            await Assert.ThrowsAsync<ReplicaSnapshotException>(() => context.CreateReader().ReadAsync(
+                new ReplicaSnapshotReadRequest(destination),
+                progress: null,
+                CancellationToken.None));
+        }
+    }
+
+    [Fact]
+    public async Task JsonBeyondMaximumDepthIsRejected()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "deep.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        string manifest = Encoding.UTF8.GetString(ReadZipEntry(destination, "manifest.json"));
+        string nested = string.Concat(Enumerable.Repeat("{\"item\":", 70)) +
+            "0" + new string('}', 70);
+        int end = manifest.LastIndexOf('}');
+        ReplaceZipEntry(
+            destination,
+            "manifest.json",
+            Encoding.UTF8.GetBytes(manifest.Insert(end, $",\"attack\":{nested}")));
+
+        await Assert.ThrowsAsync<ReplicaSnapshotException>(() => context.CreateReader().ReadAsync(
+            new ReplicaSnapshotReadRequest(destination),
+            progress: null,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task OversizedJsonStringIsRejectedBeforeDeserialization()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "large-string.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        string manifest = Encoding.UTF8.GetString(ReadZipEntry(destination, "manifest.json"));
+        int end = manifest.LastIndexOf('}');
+        ReplaceZipEntry(
+            destination,
+            "manifest.json",
+            Encoding.UTF8.GetBytes(manifest.Insert(end, $",\"attack\":\"{new string('x', 8192)}\"")));
+        ReplicaSnapshotReadLimits limits = ReplicaSnapshotReadLimits.Default with
+        {
+            MaximumJsonSize = 4096,
+        };
+
+        await Assert.ThrowsAsync<ReplicaSnapshotException>(() => context.CreateReader(limits).ReadAsync(
+            new ReplicaSnapshotReadRequest(destination),
+            progress: null,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UnsupportedSchemaIsRejectedBeforeInventoryUse()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "old-schema.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        JsonObject manifest = JsonNode.Parse(ReadZipEntry(destination, "manifest.json"))!.AsObject();
+        manifest["schemaVersion"] = "0.0";
+        ReplaceZipEntry(destination, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString()));
+
+        ReplicaSnapshotException exception = await Assert.ThrowsAsync<ReplicaSnapshotException>(() =>
+            context.CreateReader().ReadAsync(
+                new ReplicaSnapshotReadRequest(destination),
+                progress: null,
+                CancellationToken.None));
+
+        Assert.Contains("unsupported", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DuplicateChecksumRecordCannotBypassIntegrityIndex()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "duplicate-checksum.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        JsonArray checksums = JsonNode.Parse(ReadZipEntry(destination, "checksums.json"))!.AsArray();
+        checksums.Add(checksums[0]!.DeepClone());
+        ReplaceZipEntry(destination, "checksums.json", Encoding.UTF8.GetBytes(checksums.ToJsonString()));
+
+        await Assert.ThrowsAsync<ReplicaSnapshotException>(() => context.CreateReader().ReadAsync(
+            new ReplicaSnapshotReadRequest(destination),
+            progress: null,
+            CancellationToken.None));
     }
 
     [Theory]
