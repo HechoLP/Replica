@@ -78,6 +78,19 @@ public sealed class SnapshotHistoryViewModelTests
         Assert.All(dialogs.Password, character => Assert.Equal('\0', character));
     }
 
+    [Fact]
+    public async Task OpenFromCommandLine_IndexesAndDisplaysSnapshot()
+    {
+        FakeHistoryService service = new();
+        SnapshotHistoryViewModel viewModel = CreateViewModel(service, out _, out _, out _);
+
+        await viewModel.OpenFromCommandLineAsync("C:\\Snapshots\\recovery.replica");
+
+        Assert.True(viewModel.IsVisible);
+        Assert.Equal(1, service.AddCalls);
+        Assert.Equal(2, viewModel.Snapshots.Count);
+    }
+
     private static SnapshotHistoryViewModel CreateViewModel(
         FakeHistoryService service,
         out FakeRecoveryDialogs recoveryDialogs,

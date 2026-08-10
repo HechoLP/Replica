@@ -1,0 +1,8 @@
+Replica for Windows
+
+This installer is UNSIGNED.
+
+No production code-signing certificate was available when this package was built.
+Windows may show an unrecognized publisher warning. Download Replica only from the
+official HechoLP/Replica GitHub Releases page and verify the published SHA-256 value
+before running the installer.
