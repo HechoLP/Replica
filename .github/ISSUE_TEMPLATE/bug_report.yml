@@ -1,0 +1,97 @@
+name: Bug Report
+description: Report a reproducible Replica defect using synthetic, non-sensitive data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Do not attach private Snapshots, credentials, tokens, user files, or unredacted logs. Security vulnerabilities belong in the private process described in SECURITY.md.
+  - type: dropdown
+    id: release_channel
+    attributes:
+      label: Build or channel
+      description: Select the build type where the problem occurs.
+      options:
+        - Latest default-branch source build
+        - Alpha Release
+        - Beta Release
+        - Release candidate
+        - Stable Release
+        - Unknown
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Replica version or commit
+      description: Provide the exact version, tag, or commit hash.
+      placeholder: 0.1.0-alpha.1 or abc1234
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Provide the Windows 11 edition, version, build, and architecture.
+      placeholder: Windows 11 Pro 24H2, build 26100, x64
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Scan
+        - Snapshot creation or validation
+        - Comparison or Diff Restore
+        - Restore Plan or Dry Run
+        - Restore execution
+        - Recovery Wizard
+        - Rollback
+        - History
+        - Update or installer
+        - User interface or accessibility
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic data and include the smallest repeatable sequence.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include only redacted messages or synthetic fixtures. Do not paste environment values or file contents.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched for an existing report.
+          required: true
+        - label: I removed usernames, paths, credentials, tokens, private files, and other sensitive data.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true

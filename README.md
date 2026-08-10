@@ -2,58 +2,140 @@
 
 > Clone your Windows setup, not your files.
 
-Replica is a planned Windows 11 desktop application for recording a machine's recoverable setup, comparing it with another installation, and restoring only the items a user approves. It is not a disk image, credential migrator, or unattended PC cloning tool.
+Replica is a Windows environment migration and recovery tool that restores only what is missing or different.
 
-The product will capture installed applications and versions, winget and Store identities, selected application settings, environment variables and PATH, development tooling, fonts, and explicitly selected files. A user can save that inventory as a `.replica` snapshot, open it after reinstalling Windows, review a diff, run a dry-run restore plan, apply supported actions, and verify or roll back Replica-owned changes.
+[![CI](https://github.com/HechoLP/Replica/actions/workflows/ci.yml/badge.svg)](https://github.com/HechoLP/Replica/actions/workflows/ci.yml)
 
-## Snapshot choices
+Replica records the parts of a Windows 11 environment that can be safely reconstructed, compares a Snapshot with the current computer, and turns approved differences into a typed restore plan. It is not a disk image, a full-profile backup, a credential migrator, or an unattended cloning tool.
 
-- **Lightweight Snapshot** records inventory and settings but does not include application installers or personal files.
-- **Recovery Snapshot** adds only user-selected folders and files plus recovery preferences.
-- **Offline Recovery Pack** may also contain explicitly selected installers for software that cannot conveniently be fetched again. It is intentionally not the default because it can be very large.
+> [!IMPORTANT]
+> Replica is currently pre-release software. Review the [current limitations](#current-limitations) before using it with important data, and test recovery on non-critical data first.
 
-See [Snapshot types](docs/SNAPSHOT_TYPES.md) for the exact boundaries.
+## Before and after a Windows reset
 
-## Safety model
+Before resetting Windows, create a Recovery Snapshot, verify its SHA-256, test that Replica can open it, and copy it to an external or separately synchronized location. Replica can record installed applications, supported settings, non-sensitive environment data, and only the user folders selected during Snapshot creation.
 
-Replica defaults to Safe restore mode. It never automatically removes extra applications, automatically downgrades software, collects credentials, or sweeps broad personal-data locations. Every system change is represented in a typed restore plan, previewed as a dry run, journaled before execution, and verified afterward. Administrative work is isolated to approved actions executed by the same application in a short-lived elevated mode.
+After the reset, open Replica and choose **Post-reset recovery**. Replica validates the archive, scans the current computer without changing it, checks hardware and drive differences, shows a comparison, and creates a restore plan. Nothing changes until the user reviews the Dry Run and gives final approval. Supported changes are journaled before execution and verified afterward.
 
-## Distribution
+See the [recovery workflow](docs/RECOVERY_WIZARD.md) for restart/resume, drive mapping, file conflicts, and manual authentication boundaries.
 
-The official distribution channel is GitHub Releases for `HechoLP/Replica`. End users install one file:
+## Diff Restore
 
-```text
-ReplicaSetup.exe
+Diff Restore compares the Snapshot with the current computer instead of overwriting the environment wholesale. It reports missing or extra applications, version and configuration differences, changed files, conflicts, unsupported items, sensitive exclusions, and manual steps. Extra applications are kept by default and are not automatically removed.
+
+Restore plans use one of three review policies:
+
+| Mode | Default behavior |
+| --- | --- |
+| **Safe** | Select missing, low-risk items; keep extras; block downgrades; ask on file conflicts. |
+| **Recommended** | Add compatible updates, supported settings, and environment merges while retaining safety gates. |
+| **Exact** | Show every actionable difference, but keep removal, downgrade, and high-risk work manual and unselected. |
+
+Read [Diff Restore](docs/DIFF_RESTORE.md) for difference and similarity-score semantics.
+
+## Snapshot types
+
+All Snapshot types use the versioned, ZIP-based `.replica` format with structure, path, resource-limit, and checksum validation.
+
+| Type | Intended contents |
+| --- | --- |
+| **Lightweight Snapshot** | Inventory, supported settings, exclusions, and recovery metadata; no personal files or application installers. |
+| **Recovery Snapshot** | Lightweight contents plus only explicitly selected folders and files. |
+| **Offline Recovery Pack** | Recovery contents plus explicitly selected, provenance-tracked offline installers where storage and redistribution are permitted. |
+
+Offline installers are never assumed to be redistributable, and an Offline Recovery Pack is not the default. See [Snapshot types](docs/SNAPSHOT_TYPES.md).
+
+## Supported capabilities
+
+The current source implements:
+
+- read-only Windows, winget, uninstall-registry, MSIX/Store, environment/PATH, font, and built-in plugin discovery;
+- hardened `.replica` writing and reading, optional password-based AES-GCM encryption, SHA-256 checksums, cancellation, and atomic output;
+- application identity matching, version comparison, typed differences, and deterministic similarity scores;
+- reviewed Safe, Recommended, and Exact restore plans with dependency validation and Dry Run summaries;
+- allow-listed winget, environment/PATH, registry, and selected-file restore handlers with narrow same-executable elevation;
+- rollback journals for Replica-owned file, environment, PATH, registry, and explicitly supported plugin changes;
+- post-reset recovery, Snapshot history and comparison, portable export, and GitHub Releases update checks;
+- Korean-default WPF UI with English resources, Light/Dark themes, keyboard navigation, high-contrast support, and asynchronous long-running commands.
+
+Automated tests use fakes and temporary data. They do not install software or change the real registry, environment, PATH, fonts, or user files.
+
+## Built-in program support
+
+Replica ships a fixed built-in catalog; users do not install a separate plugin manager.
+
+- Developer tools: Visual Studio Code, Git, PowerShell, Windows Terminal, Node.js, and Python.
+- Applications: PowerToys, Everything, OBS Studio, Minecraft, Docker Desktop, and Ableton Live.
+
+Support means allow-listed inventory and configuration for recognized versions, not a complete copy of every program directory. Unsupported versions and ambiguous matches remain visible for manual review. Licensed software, authentication, large content libraries, game binaries, and other excluded payloads are not silently captured or restored. Details are in the [built-in plugin model](docs/PLUGIN_MODEL.md).
+
+## Security and privacy exclusions
+
+Replica does not collect or restore passwords, cookies, login sessions, OAuth or API tokens, credential values, SSH private keys, BitLocker recovery keys, payment data, browser profiles, private-key certificates, OBS stream keys, launcher authentication, or license/activation state.
+
+It also does not implicitly sweep all of AppData, Windows, Program Files, ProgramData, caches, logs, temporary data, or large game installation folders. Recovery files must be explicitly selected. Archive extraction rejects traversal, absolute paths, duplicate entries, unsafe links/reparse points, and decompression-limit violations.
+
+See the [security model](docs/SECURITY.md), [threat model](docs/THREAT_MODEL.md), and [security policy](SECURITY.md).
+
+## Installation and GitHub Releases
+
+[GitHub Releases](https://github.com/HechoLP/Replica/releases) is the only official distribution channel. When a release is available, a normal user needs to download only the latest Asset named **`ReplicaSetup.exe`**.
+
+- The automatically generated **Source code (zip)** and **Source code (tar.gz)** files are not Windows installers.
+- **Stable** Releases are recommended for normal use.
+- **Alpha** and **Beta** Releases are test versions and may contain incomplete or changing behavior.
+- Until production code signing is configured, the installer is clearly marked **Unsigned**. Verify the published `ReplicaSetup.exe.sha256` before running it.
+- If the Releases page contains no published release, there is no official installer to download yet. Do not download executables offered through issues, pull requests, or third-party mirrors.
+
+The installer is self-contained for Windows 11 `win-x64`; users do not separately install the .NET runtime. Installation behavior is documented in [Windows installer](docs/WINDOWS_INSTALLER.md).
+
+## Current limitations
+
+- Windows 11 on `win-x64` is the only supported client target.
+- No Stable Release or production code-signing certificate has been established yet.
+- Hardware drivers, credentials, authentication sessions, paid licenses, private keys, browser profiles, entire WSL disks, containers, volumes, and full application directories are outside automatic recovery.
+- Low-confidence package matches, unsupported versions, hardware-dependent settings, and unrecognized configuration remain manual.
+- Replica never automatically removes extra applications, downgrades software, reboots Windows, or uninstalls programs during rollback.
+- Recovery depends on the content actually captured, current package availability, adequate storage, and user-approved path mappings.
+- A project license has not been selected; the repository is not currently offered under an open-source license.
+
+## Roadmap
+
+The next release gates include public release validation, clean-VM recovery and rollback checks, private vulnerability reporting, production code signing, and progression through alpha, beta, and release-candidate channels before Stable. See the complete [roadmap](docs/ROADMAP.md).
+
+## Development
+
+Prerequisites are Windows 11 and the .NET SDK selected by [global.json](global.json). From the repository root:
+
+```powershell
+dotnet restore Replica.sln
+dotnet list Replica.sln package --vulnerable --include-transitive
+dotnet format Replica.sln --verify-no-changes --no-restore
+dotnet build Replica.sln -c Release --no-restore
+dotnet test Replica.sln -c Release --no-build
 ```
 
-The planned desktop stack is C#, .NET 10 LTS, WPF/MVVM, SQLite, and a self-contained `win-x64` build packaged with Inno Setup. Replica's internal libraries are implementation details and are not separate user installs.
+Building an installer additionally requires Inno Setup 6:
 
-## Project status
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.1.0-alpha.1
+```
 
-The WPF client now provides a complete 1280×720-or-larger migration workspace with keyboard navigation, Light/Dark and high-contrast-aware resources, Korean defaults with English resource expansion, and dedicated Home, Scan, Snapshot Builder, Comparison, Diff, Restore Plan, Recovery, Execution, Result, History, Settings, About, and Update screens. Long operations remain asynchronous and cancellable, and every mutating flow keeps review and final approval visible.
+Do not run the opt-in installer smoke test outside a clean Windows test account or disposable VM. Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), and the [Git workflow](docs/GIT_WORKFLOW.md) before changing the repository.
 
-Replica now has a compilable .NET 10 WPF desktop bootstrap, a versioned and hardened `.replica` snapshot format, a read-only Windows environment scanner, explainable application identity and version matching, and a deterministic read-only diff engine with weighted similarity scores and safety metadata. A typed restore planner converts reviewed differences into an allow-listed dependency DAG, blocks unsafe defaults, and presents a Dry Run for explicit approval in the WPF shell. The controlled executor can apply approved winget, environment/PATH, allow-listed registry, and explicitly mapped file actions with cancellation, verification, journal-before-change enforcement, and narrow same-executable elevation. A checksum-protected rollback journal can preview and reverse only Replica-owned file, environment, PATH, registry, and explicitly supported plugin changes; application installation remains a manual follow-up and is never automatically undone. Built-in plugins capture and compare sanitized developer configuration plus PowerToys, Everything, OBS Studio, Minecraft, Docker Desktop, and Ableton Live settings without requiring a separate plugin installation. The post-reset recovery wizard coordinates validation, current-PC analysis, hardware and drive mapping review, final plan approval, controlled execution, explicit restart resume, verification, similarity results, and authentication follow-up. A local SQLite history now indexes Snapshot metadata, file availability, restore/rollback summaries, and package-matching overrides; it compares applications, supported settings, and selected-file size/time/hash without storing Snapshot bodies or file contents. Portable export validates USB, external, ordinary, network, and synchronized destinations, writes through a temporary extension, verifies SHA-256, and provides a before-reset checklist. With explicit approval it can separately retain the official GitHub Release `ReplicaSetup.exe` without running it. The GitHub update service now supports Stable, Beta, and Alpha semantic-version channels, Rate Limit/error reporting, version skipping, cancellable Temp downloads, available SHA-256 verification, and a separately approved interactive installer handoff. Historical restores still begin as an unapproved typed plan. Automatic removal, automatic downgrade, automatic reboot, credential restoration, and arbitrary command execution remain unsupported. The staged delivery plan is in [ROADMAP.md](docs/ROADMAP.md).
+## Project links
 
-## Documentation
-
+- [GitHub repository](https://github.com/HechoLP/Replica)
+- [GitHub Releases](https://github.com/HechoLP/Replica/releases)
+- [Changelog](CHANGELOG.md)
 - [Product specification](docs/PRODUCT_SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Recovery workflow](docs/RECOVERY_WORKFLOW.md)
-- [Post-reset recovery wizard](docs/RECOVERY_WIZARD.md)
-- [Snapshot history and comparison](docs/SNAPSHOT_HISTORY.md)
-- [Portable Snapshot export](docs/PORTABLE_SNAPSHOT.md)
-- [GitHub Releases update service](docs/GITHUB_UPDATES.md)
-- [WPF migration and recovery UI](docs/WPF_UI.md)
-- [Diff restore](docs/DIFF_RESTORE.md)
-- [Built-in developer plugins](docs/PLUGIN_MODEL.md)
-- [Security](docs/SECURITY.md) and [threat model](docs/THREAT_MODEL.md)
-- [Git workflow](docs/GIT_WORKFLOW.md) and [release process](docs/RELEASE_PROCESS.md)
-- [License decision](docs/LICENSE_DECISION.md)
+- [Public release process](docs/RELEASE_PROCESS.md)
 
-## Contributing
+## Security reporting
 
-Read [AGENTS.md](AGENTS.md) and [GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) before making changes. System-changing behavior requires a dry run, rollback journal design, least-privilege review, and tests that use mocks rather than the real Windows environment.
+Do not publish vulnerabilities, malicious Snapshot samples, credentials, or user data in an issue. Follow [SECURITY.md](SECURITY.md) for private reporting guidance and safe reproduction requirements.
 
-## License
+## License status
 
-No license has been selected yet. Until the repository owner makes and records that decision, the contents are not offered under an open-source license. See [LICENSE_DECISION.md](docs/LICENSE_DECISION.md).
+No license has been selected. Unless and until the owner adds a root `LICENSE`, the repository is not offered under an open-source license and no general permission to copy, modify, or distribute the code is granted. See [License decision](docs/LICENSE_DECISION.md).

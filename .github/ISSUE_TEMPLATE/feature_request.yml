@@ -1,0 +1,65 @@
+name: Feature Request
+description: Propose a focused Replica capability or user-experience improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem before proposing implementation. Replica will not accept features that bypass Dry Run, typed plans, explicit approval, least privilege, rollback journaling, or sensitive-data exclusions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who is affected, and what cannot be done safely today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior rather than an implementation mandate.
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Workflow area
+      options:
+        - Before-reset capture
+        - Snapshot format or portability
+        - Scan or discovery
+        - Comparison or matching
+        - Restore Plan or Dry Run
+        - Restore execution
+        - Post-reset recovery
+        - Rollback
+        - History
+        - Update or installer
+        - User interface or accessibility
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety, privacy, and rollback impact
+      description: Identify data read or written, elevation, approvals, failure modes, and what can be rolled back.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds or smaller approaches.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Product boundaries
+      options:
+        - label: The request does not require arbitrary commands, credential capture, silent system changes, automatic downgrade/removal/reboot, or unselected user-file collection.
+          required: true
+        - label: I searched for an existing request.
+          required: true
