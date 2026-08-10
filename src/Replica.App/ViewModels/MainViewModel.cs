@@ -45,7 +45,8 @@ public sealed partial class MainViewModel : ObservableObject
         DiffViewerViewModel diffViewer,
         RestoreDryRunViewModel restoreDryRun,
         RollbackViewModel rollback,
-        RecoveryWizardViewModel? recoveryWizard = null)
+        RecoveryWizardViewModel? recoveryWizard = null,
+        SnapshotHistoryViewModel? snapshotHistory = null)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -60,6 +61,7 @@ public sealed partial class MainViewModel : ObservableObject
         RestoreDryRun = restoreDryRun;
         Rollback = rollback;
         RecoveryWizard = recoveryWizard;
+        SnapshotHistory = snapshotHistory;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -92,6 +94,8 @@ public sealed partial class MainViewModel : ObservableObject
     public RollbackViewModel Rollback { get; }
 
     public RecoveryWizardViewModel? RecoveryWizard { get; }
+
+    public SnapshotHistoryViewModel? SnapshotHistory { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
@@ -177,10 +181,16 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ShowSnapshotHistory()
+    private async Task ShowSnapshotHistoryAsync(CancellationToken cancellationToken)
     {
         _navigationService.Navigate(NavigationDestination.SnapshotHistory);
-        ShowPlannedFeature("Snapshot 기록");
+        if (SnapshotHistory is null)
+        {
+            ShowPlannedFeature("Snapshot 기록");
+            return;
+        }
+
+        await SnapshotHistory.ShowAsync(cancellationToken);
     }
 
     [RelayCommand]

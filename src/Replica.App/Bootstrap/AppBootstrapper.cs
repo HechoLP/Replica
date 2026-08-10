@@ -4,6 +4,7 @@ using Replica.App.Services;
 using Replica.App.ViewModels;
 using Replica.Core.Diffing;
 using Replica.Core.Execution;
+using Replica.Core.History;
 using Replica.Core.Matching;
 using Replica.Core.Models;
 using Replica.Core.Planning;
@@ -11,6 +12,7 @@ using Replica.Core.Plugins;
 using Replica.Core.Recovery;
 using Replica.Core.Services;
 using Replica.Infrastructure.Environment;
+using Replica.Infrastructure.History;
 using Replica.Infrastructure.Paths;
 using Replica.Infrastructure.Recovery;
 using Replica.Infrastructure.Restore;
@@ -94,10 +96,12 @@ public static class AppBootstrapper
         services.AddSingleton<IRecoveryHardwareScanner, WindowsRecoveryHardwareScanner>();
         services.AddSingleton<IRecoveryWizardRuntime, RecoveryWizardRuntime>();
         services.AddSingleton<IRecoveryWizardService, RecoveryWizardService>();
+        services.AddSingleton<ISnapshotHistoryService, SqliteSnapshotHistoryService>();
 
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IRecoveryDialogService, RecoveryDialogService>();
+        services.AddSingleton<ISnapshotHistoryDialogService, SnapshotHistoryDialogService>();
         services.AddSingleton<ILocalizationService, ResourceLocalizationService>();
         services.AddSingleton<IThemeService, WpfThemeService>();
         services.AddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
@@ -107,6 +111,7 @@ public static class AppBootstrapper
         services.AddSingleton<RestoreDryRunViewModel>();
         services.AddSingleton<RollbackViewModel>();
         services.AddSingleton<RecoveryWizardViewModel>();
+        services.AddSingleton<SnapshotHistoryViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(

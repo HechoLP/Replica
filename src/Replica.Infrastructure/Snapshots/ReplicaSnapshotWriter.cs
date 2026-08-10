@@ -82,7 +82,8 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
                         file.ArchivePath,
                         Path.GetFileName(file.SourcePath),
                         stagedLength,
-                        hash));
+                        hash,
+                        File.GetLastWriteTimeUtc(file.SourcePath)));
                 progress?.Report(
                     new ReplicaSnapshotProgress(
                         ReplicaSnapshotStage.Staging,

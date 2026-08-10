@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Replica.Core.History;
 using Replica.Core.Rollback;
 using Replica.Core.Services;
 
@@ -8,11 +9,15 @@ namespace Replica.App.ViewModels;
 public sealed partial class RollbackViewModel : ObservableObject
 {
     private readonly IRollbackService _rollbackService;
+    private readonly ISnapshotHistoryService? _snapshotHistory;
     private RollbackPlan? _plan;
 
-    public RollbackViewModel(IRollbackService rollbackService)
+    public RollbackViewModel(
+        IRollbackService rollbackService,
+        ISnapshotHistoryService? snapshotHistory = null)
     {
         _rollbackService = rollbackService;
+        _snapshotHistory = snapshotHistory;
     }
 
     [ObservableProperty]
@@ -156,6 +161,7 @@ public sealed partial class RollbackViewModel : ObservableObject
                 _plan,
                 progress,
                 cancellationToken);
+            await TryRecordHistoryAsync(result, cancellationToken);
             Results = result.Items.Select(item => new RollbackResultRowViewModel(
                 item.ActionId,
                 item.State.ToString(),
@@ -183,6 +189,33 @@ public sealed partial class RollbackViewModel : ObservableObject
     }
 
     private bool CanExecutePlan() => CanExecute;
+
+    private async Task TryRecordHistoryAsync(
+        RollbackExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        if (_snapshotHistory is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _snapshotHistory.RecordRollbackAsync(
+                new RollbackHistoryRecord(
+                    result.SessionId,
+                    DateTimeOffset.UtcNow,
+                    result.State.ToString(),
+                    result.Items.Count,
+                    result.Items.Count(item => item.State == RollbackJournalState.RollbackFailed)),
+                cancellationToken);
+        }
+        catch (Exception exception) when (
+            exception is not OperationCanceledException and not OutOfMemoryException)
+        {
+            // The verified rollback result remains authoritative if local history indexing fails.
+        }
+    }
 
     private void NotifyReviewStateChanged()
     {

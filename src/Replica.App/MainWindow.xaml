@@ -96,6 +96,130 @@
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding SnapshotHistory.IsVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel DataContext="{Binding SnapshotHistory}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Text="Snapshot 기록" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Text="Snapshot 본문이 아닌 메타데이터와 비교 인덱스만 SQLite에 저장합니다." />
+                            </StackPanel>
+                            <WrapPanel Grid.Column="1">
+                                <Button Margin="0,0,8,0"
+                                        Padding="14,8"
+                                        Command="{Binding RefreshCommand}"
+                                        Content="새로 고침" />
+                                <Button Padding="14,8"
+                                        Command="{Binding AddSnapshotCommand}"
+                                        Content="Snapshot 기록 추가" />
+                            </WrapPanel>
+                        </Grid>
+
+                        <TextBlock Margin="0,10,0,0"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding StatusText}"
+                                   TextWrapping="Wrap" />
+
+                        <DataGrid Margin="0,12,0,0"
+                                  MaxHeight="260"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  ItemsSource="{Binding Snapshots}"
+                                  SelectedItem="{Binding SelectedSnapshot}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="150" Header="이름" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Width="180" Header="설명" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Width="130" Header="태그" Binding="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Width="120" Header="생성 시각" Binding="{Binding CreatedAt}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="105" Header="종류" Binding="{Binding SnapshotType}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="110" Header="크기" Binding="{Binding FileSize}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="120" Header="원본 PC" Binding="{Binding SourceMachineName}" IsReadOnly="True" />
+                                <DataGridCheckBoxColumn Width="75" Header="암호화" Binding="{Binding IsEncrypted}" IsReadOnly="True" />
+                                <DataGridCheckBoxColumn Width="85" Header="파일 존재" Binding="{Binding FileExists}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="85" Header="환경 점수" Binding="{Binding EnvironmentScore}" IsReadOnly="True" />
+                                <DataGridTextColumn Width="*" Header="파일 경로" Binding="{Binding FilePath}" IsReadOnly="True" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Padding="14,8"
+                                    Command="{Binding SaveDetailsCommand}"
+                                    Content="이름·설명·태그 저장" />
+                            <Button Margin="8,0,0,0"
+                                    Padding="14,8"
+                                    Command="{Binding DeleteSnapshotCommand}"
+                                    Content="삭제" />
+                        </WrapPanel>
+
+                        <TextBlock Margin="0,18,0,7"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Text="Snapshot 간 비교" />
+                        <WrapPanel>
+                            <TextBlock Margin="0,7,8,0" Text="이전" />
+                            <ComboBox Width="240"
+                                      DisplayMemberPath="DisplayLabel"
+                                      ItemsSource="{Binding Snapshots}"
+                                      SelectedItem="{Binding FromSnapshot}" />
+                            <TextBlock Margin="12,7,8,0" Text="→ 이후" />
+                            <ComboBox Width="240"
+                                      DisplayMemberPath="DisplayLabel"
+                                      ItemsSource="{Binding Snapshots}"
+                                      SelectedItem="{Binding ToSnapshot}" />
+                            <Button Margin="10,0,0,0"
+                                    Padding="14,8"
+                                    Command="{Binding CompareCommand}"
+                                    Content="비교" />
+                            <Button Margin="8,0,0,0"
+                                    Padding="14,8"
+                                    Command="{Binding CreatePastRestorePlanCommand}"
+                                    Content="이전 상태 Restore Plan" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,10,0,0"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding ComparisonSummary}" />
+                        <DataGrid Margin="0,8,0,0"
+                                  MaxHeight="300"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding ComparisonItems}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="70" Header="변화" Binding="{Binding Change}" />
+                                <DataGridTextColumn Width="100" Header="영역" Binding="{Binding Area}" />
+                                <DataGridTextColumn Width="180" Header="항목" Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="150" Header="이전" Binding="{Binding Before}" />
+                                <DataGridTextColumn Width="150" Header="이후" Binding="{Binding After}" />
+                                <DataGridTextColumn Width="100" Header="용량 변화" Binding="{Binding SizeDelta}" />
+                                <DataGridTextColumn Width="80" Header="Hash" Binding="{Binding Hash}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="22"
+                        Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
                                 <DataTrigger Binding="{Binding RecoveryWizard.IsVisible}" Value="True">
                                     <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>

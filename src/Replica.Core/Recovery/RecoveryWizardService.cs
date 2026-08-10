@@ -1,4 +1,5 @@
 using Replica.Core.Execution;
+using Replica.Core.History;
 using Replica.Core.Planning;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
@@ -10,18 +11,21 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
     private readonly IRecoveryWizardRuntime _runtime;
     private readonly IRecoverySessionStore _sessionStore;
     private readonly IRecoveryStartupRegistrar _startupRegistrar;
+    private readonly ISnapshotHistoryService? _snapshotHistory;
     private readonly TimeProvider _timeProvider;
 
     public RecoveryWizardService(
         IRecoveryWizardRuntime runtime,
         IRecoverySessionStore sessionStore,
         IRecoveryStartupRegistrar startupRegistrar,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ISnapshotHistoryService? snapshotHistory = null)
     {
         _runtime = runtime;
         _sessionStore = sessionStore;
         _startupRegistrar = startupRegistrar;
         _timeProvider = timeProvider;
+        _snapshotHistory = snapshotHistory;
     }
 
     public async Task<RecoveryStartResult> StartAsync(
@@ -319,7 +323,41 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
                 .ToArray(),
         });
         await _sessionStore.SaveAsync(completed, cancellationToken).ConfigureAwait(false);
+        await TryRecordRestoreHistoryAsync(completed, cancellationToken).ConfigureAwait(false);
         return completed;
+    }
+
+    private async Task TryRecordRestoreHistoryAsync(
+        RecoveryWizardSession session,
+        CancellationToken cancellationToken)
+    {
+        if (_snapshotHistory is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _snapshotHistory.RecordRestoreAsync(
+                new RestoreHistoryRecord(
+                    session.SessionId,
+                    session.SnapshotId,
+                    session.CreatedAtUtc,
+                    session.UpdatedAtUtc,
+                    session.Status.ToString(),
+                    session.ActionResults.Count(result => result.State is
+                        RestoreExecutionState.Succeeded or RestoreExecutionState.RequiresRestart),
+                    session.ActionResults.Count(result => result.State == RestoreExecutionState.Failed),
+                    session.ActionResults.Count(result => result.State == RestoreExecutionState.Skipped),
+                    session.SimilarityBefore,
+                    session.SimilarityAfter),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is not OperationCanceledException and not OutOfMemoryException)
+        {
+            // A local history-index failure must not turn a completed restore into a failed mutation.
+        }
     }
 
     private RecoveryWizardSession MergeExecution(
