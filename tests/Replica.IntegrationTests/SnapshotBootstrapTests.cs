@@ -6,6 +6,7 @@ using Replica.Core.Planning;
 using Replica.Core.Services;
 using Replica.Infrastructure.Restore;
 using Replica.Infrastructure.Snapshots;
+using Replica.Infrastructure.Updates;
 
 namespace Replica.IntegrationTests;
 
@@ -19,6 +20,17 @@ public sealed class SnapshotBootstrapTests
         Assert.IsType<SnapshotSelectionEstimator>(services.GetRequiredService<ISnapshotSelectionEstimator>());
         Assert.IsType<ReplicaSnapshotReader>(services.GetRequiredService<ISnapshotReader>());
         Assert.IsType<ReplicaSnapshotWriter>(services.GetRequiredService<ISnapshotWriter>());
+    }
+
+    [Fact]
+    public void GitHubUpdateServicesResolveFromApplicationBootstrapper()
+    {
+        using ServiceProvider services = AppBootstrapper.BuildServices();
+
+        Assert.IsType<GitHubReleaseSource>(services.GetRequiredService<IGitHubReleaseCatalog>());
+        Assert.IsType<GitHubUpdateDownloadService>(services.GetRequiredService<IUpdateDownloadService>());
+        Assert.IsType<UpdateInstallerService>(services.GetRequiredService<IUpdateInstallerService>());
+        Assert.NotNull(services.GetRequiredService<UpdateViewModel>());
     }
 
     [Fact]

@@ -52,7 +52,7 @@ public sealed class GitHubReleaseSourceTests : IDisposable
             ]
             """;
         using HttpClient client = new(new FakeGitHubHandler(json, installer));
-        GitHubReleaseSource source = new(client, ReleaseRepositoryOptions.Replica);
+        GitHubReleaseSource source = new(client, ReleaseRepositoryOptions.Replica, TimeProvider.System);
         ReplicaInstallerDownloadService service = new(
             source,
             new WritableStorageInspector(root),

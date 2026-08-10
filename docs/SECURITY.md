@@ -49,6 +49,8 @@ Official downloads come from repository releases, use HTTPS, and are matched by 
 
 The optional before-reset installer copy accepts only `ReplicaSetup.exe` from published `HechoLP/Replica` GitHub Releases after explicit approval. It is stored beside recovery material rather than inside a Snapshot, streams to a temporary name with bounded declared size, verifies GitHub's SHA-256 digest when present, and is never launched automatically. A missing release digest is shown as unavailable rather than treated as verification.
 
+The in-app update workflow additionally separates lookup, download, and installer launch. Channel filtering and strict SemVer parsing prevent prerelease drift. Downloads use randomized application-owned Temp sessions, bounded response and Asset sizes, explicit timeout/cancellation, official URL and filename allow-lists, and SHA-256 agreement across available sources. Launch requires a second approval and repeats path, size, reparse-point, and hash validation. Replica passes no silent or arbitrary arguments and does not force elevation.
+
 CI uses least-privilege tokens, pinned actions where possible, protected release environments for secrets, and immutable version tags. Dependency and installer changes require review. A failed test, packaging check, checksum step, or signing step prevents publication.
 
 ## Vulnerability reporting
