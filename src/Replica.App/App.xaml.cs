@@ -37,6 +37,8 @@ public partial class App : Application
             }
 
             _exceptionHandler = _services.GetRequiredService<IGlobalExceptionHandler>();
+            IThemeService theme = _services.GetRequiredService<IThemeService>();
+            theme.ApplyTheme(theme.CurrentTheme);
 
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;

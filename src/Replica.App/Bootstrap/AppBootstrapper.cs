@@ -131,18 +131,24 @@ public static class AppBootstrapper
         services.AddSingleton<IPortableSnapshotDialogService, PortableSnapshotDialogService>();
         services.AddSingleton<IUpdateDialogService, UpdateDialogService>();
         services.AddSingleton<IApplicationLifetime, WpfApplicationLifetime>();
+        services.AddSingleton<IAppLanguageService, WpfAppLanguageService>();
         services.AddSingleton<ILocalizationService, ResourceLocalizationService>();
         services.AddSingleton<IThemeService, WpfThemeService>();
         services.AddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
 
-        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<ReplicaUiSession>();
         services.AddSingleton<DiffViewerViewModel>();
         services.AddSingleton<RestoreDryRunViewModel>();
+        services.AddSingleton<RestoreResultViewModel>();
+        services.AddSingleton<RestoreExecutionViewModel>();
         services.AddSingleton<RollbackViewModel>();
         services.AddSingleton<RecoveryWizardViewModel>();
         services.AddSingleton<SnapshotHistoryViewModel>();
         services.AddSingleton<PortableSnapshotViewModel>();
         services.AddSingleton<UpdateViewModel>();
+        services.AddSingleton<SnapshotBuilderViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(

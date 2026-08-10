@@ -3,4 +3,19 @@
                     xmlns:system="clr-namespace:System;assembly=System.Runtime">
     <system:String x:Key="ProductName">Replica</system:String>
     <system:String x:Key="ProductTagline">Clone your Windows setup, not your files.</system:String>
+    <system:String x:Key="ProductSubtitle">Windows environment recovery</system:String>
+    <system:String x:Key="NavHome">_Home</system:String>
+    <system:String x:Key="NavScan">_Scan this PC</system:String>
+    <system:String x:Key="NavSnapshotBuilder">Snapshot _Builder</system:String>
+    <system:String x:Key="NavComparison">_Comparison</system:String>
+    <system:String x:Key="NavDiffViewer">_Diff Viewer</system:String>
+    <system:String x:Key="NavRestorePlan">Restore _Plan</system:String>
+    <system:String x:Key="NavRecovery">Post-reset _Recovery</system:String>
+    <system:String x:Key="NavExecution">_Execution</system:String>
+    <system:String x:Key="NavResult">_Result</system:String>
+    <system:String x:Key="NavHistory">_History</system:String>
+    <system:String x:Key="NavUpdate">_Updates</system:String>
+    <system:String x:Key="NavSettings">_Settings</system:String>
+    <system:String x:Key="NavAbout">_About</system:String>
+    <system:String x:Key="SafetyBadge">Review before execution · no automatic restore</system:String>
 </ResourceDictionary>
