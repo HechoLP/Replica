@@ -87,6 +87,8 @@
                             Style="{DynamicResource ActionButtonStyle}" />
                 </WrapPanel>
 
+                <views:UpdateView DataContext="{Binding Update}" />
+
                 <views:PortableSnapshotView DataContext="{Binding PortableSnapshot}" />
 
                 <Border Margin="0,18,0,0"

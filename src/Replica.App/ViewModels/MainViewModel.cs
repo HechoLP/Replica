@@ -47,7 +47,8 @@ public sealed partial class MainViewModel : ObservableObject
         RollbackViewModel rollback,
         RecoveryWizardViewModel? recoveryWizard = null,
         SnapshotHistoryViewModel? snapshotHistory = null,
-        PortableSnapshotViewModel? portableSnapshot = null)
+        PortableSnapshotViewModel? portableSnapshot = null,
+        UpdateViewModel? update = null)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
@@ -64,6 +65,7 @@ public sealed partial class MainViewModel : ObservableObject
         RecoveryWizard = recoveryWizard;
         SnapshotHistory = snapshotHistory;
         PortableSnapshot = portableSnapshot;
+        Update = update;
         SnapshotTypes =
         [
             new SnapshotTypeOption(
@@ -100,6 +102,8 @@ public sealed partial class MainViewModel : ObservableObject
     public SnapshotHistoryViewModel? SnapshotHistory { get; }
 
     public PortableSnapshotViewModel? PortableSnapshot { get; }
+
+    public UpdateViewModel? Update { get; }
 
     public IReadOnlyList<SnapshotTypeOption> SnapshotTypes { get; }
 
@@ -206,6 +210,12 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task CheckForUpdatesAsync(CancellationToken cancellationToken)
     {
+        if (Update is not null)
+        {
+            await Update.ShowAsync(cancellationToken);
+            return;
+        }
+
         UpdateCheckResult result = await _updateCheckService
             .CheckForUpdatesAsync(false, cancellationToken);
 

@@ -12,6 +12,7 @@ using Replica.Core.Planning;
 using Replica.Core.Plugins;
 using Replica.Core.Recovery;
 using Replica.Core.Services;
+using Replica.Core.Updates;
 using Replica.Infrastructure.Environment;
 using Replica.Infrastructure.History;
 using Replica.Infrastructure.Paths;
@@ -44,9 +45,18 @@ public static class AppBootstrapper
         {
             Timeout = TimeSpan.FromMinutes(15),
         });
-        services.AddSingleton<IOfficialReleaseSource, GitHubReleaseSource>();
+        services.AddSingleton<GitHubReleaseSource>();
+        services.AddSingleton<IOfficialReleaseSource>(provider =>
+            provider.GetRequiredService<GitHubReleaseSource>());
+        services.AddSingleton<IGitHubReleaseCatalog>(provider =>
+            provider.GetRequiredService<GitHubReleaseSource>());
         services.AddSingleton<IReleaseProvider, GitHubReleaseProvider>();
+        services.AddSingleton(UpdateDownloadOptions.Default);
+        services.AddSingleton<IUpdatePreferenceService, UpdatePreferenceService>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
+        services.AddSingleton<IUpdateDownloadService, GitHubUpdateDownloadService>();
+        services.AddSingleton<IUpdateProcessLauncher, WindowsUpdateProcessLauncher>();
+        services.AddSingleton<IUpdateInstallerService, UpdateInstallerService>();
         services.AddSingleton<IStorageVolumeProbe, WindowsStorageVolumeProbe>();
         services.AddSingleton<IPortableWriteProbe, PortableWriteProbe>();
         services.AddSingleton<ICloudFolderLocator, EnvironmentCloudFolderLocator>();
@@ -119,6 +129,8 @@ public static class AppBootstrapper
         services.AddSingleton<IRecoveryDialogService, RecoveryDialogService>();
         services.AddSingleton<ISnapshotHistoryDialogService, SnapshotHistoryDialogService>();
         services.AddSingleton<IPortableSnapshotDialogService, PortableSnapshotDialogService>();
+        services.AddSingleton<IUpdateDialogService, UpdateDialogService>();
+        services.AddSingleton<IApplicationLifetime, WpfApplicationLifetime>();
         services.AddSingleton<ILocalizationService, ResourceLocalizationService>();
         services.AddSingleton<IThemeService, WpfThemeService>();
         services.AddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
@@ -130,6 +142,7 @@ public static class AppBootstrapper
         services.AddSingleton<RecoveryWizardViewModel>();
         services.AddSingleton<SnapshotHistoryViewModel>();
         services.AddSingleton<PortableSnapshotViewModel>();
+        services.AddSingleton<UpdateViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider(

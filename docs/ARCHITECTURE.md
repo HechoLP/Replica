@@ -34,7 +34,7 @@ Dependencies point inward: App and Infrastructure depend on Core abstractions; C
 - **Elevation:** restarts the same `Replica.exe` for the administrator-only subset of an approved, integrity-protected, short-lived plan.
 - **Rollback:** journals original state before every supported mutation and restores only changes made by Replica.
 - **Verification:** rescans relevant targets and records action outcomes, warnings, restarts, and manual follow-up.
-- **Updates:** queries GitHub Releases metadata, compares versions, verifies asset integrity/signing status, and downloads only with user consent.
+- **Updates:** queries bounded GitHub Releases metadata, applies Stable/Beta/Alpha semantic-version policy, persists exact skipped tags, reports Rate Limits, and downloads only with user consent. Download verification and installer launch approval remain separate.
 - **Recovery installer retention:** downloads only the exact official `HechoLP/Replica` release asset after approval, stores it outside the Snapshot, verifies size and available SHA-256 metadata, and never executes it.
 
 ## End-to-end data flow

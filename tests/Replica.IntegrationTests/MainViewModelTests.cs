@@ -5,6 +5,7 @@ using Replica.Core.Navigation;
 using Replica.Core.Rollback;
 using Replica.Core.Scanning;
 using Replica.Core.Services;
+using Replica.Core.Updates;
 
 namespace Replica.IntegrationTests;
 
@@ -152,6 +153,12 @@ public sealed class MainViewModelTests
                     new Version(0, 1, 0),
                     null));
         }
+
+        public Task<UpdateCheckResult> CheckForUpdatesAsync(
+            UpdateChannel channel,
+            CancellationToken cancellationToken) => CheckForUpdatesAsync(
+                channel != UpdateChannel.Stable,
+                cancellationToken);
     }
 
     private sealed class FakeWindowsCompatibilityService : IWindowsCompatibilityService
