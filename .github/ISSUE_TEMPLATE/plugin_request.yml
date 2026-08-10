@@ -1,0 +1,75 @@
+name: Plugin Request
+description: Request allow-listed built-in migration support for an application or developer tool.
+title: "[Plugin]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Replica ships one fixed built-in plugin catalog. It does not download third-party plugin assemblies or install a plugin manager. Requests must define safe, documented settings and explicit sensitive exclusions.
+  - type: input
+    id: application
+    attributes:
+      label: Application or tool
+      placeholder: Product name
+    validations:
+      required: true
+  - type: input
+    id: publisher
+    attributes:
+      label: Publisher and official website
+      description: Include the publisher name and canonical product URL.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions to support
+      description: List tested Windows versions and application versions.
+    validations:
+      required: true
+  - type: textarea
+    id: detect
+    attributes:
+      label: Safe detection method
+      description: Describe read-only, stable identifiers such as a winget ID, MSIX family, MSI product code, or documented install location.
+    validations:
+      required: true
+  - type: textarea
+    id: capture
+    attributes:
+      label: Settings to capture
+      description: List exact, narrow settings or files and why each is useful. Do not request whole profile or program folders.
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: Sensitive and large-data exclusions
+      description: List credentials, tokens, cookies, licenses, caches, databases, binaries, and large data that must never be captured automatically.
+    validations:
+      required: true
+  - type: textarea
+    id: restore
+    attributes:
+      label: Restore and validation behavior
+      description: Explain merge/conflict behavior, running-process restrictions, supported typed actions, and post-restore validation.
+    validations:
+      required: true
+  - type: textarea
+    id: licensing
+    attributes:
+      label: Format and licensing references
+      description: Link to official format documentation and identify redistribution or license restrictions.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This request does not require credentials, authentication bypass, paid-license copying, or arbitrary command execution.
+          required: true
+        - label: I can provide synthetic fixtures or documented sample settings without private user data.
+          required: true
+        - label: I searched the built-in catalog and existing requests.
+          required: true

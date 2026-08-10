@@ -56,6 +56,10 @@ jobs:
         shell: powershell
         run: ./scripts/test-release-automation.ps1
 
+      - name: Verify public documentation
+        shell: powershell
+        run: ./scripts/test-public-documentation.ps1
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
