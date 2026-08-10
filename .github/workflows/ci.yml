@@ -4,8 +4,8 @@ on:
   pull_request:
   push:
     branches:
-      - main
       - chore/project-foundation
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,12 +31,14 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Packages.props
+            **/*.csproj
 
       - name: Restore
         run: dotnet restore Replica.sln
-
-      - name: Audit vulnerable packages
-        run: dotnet list Replica.sln package --vulnerable --include-transitive
 
       - name: Verify formatting
         run: dotnet format Replica.sln --verify-no-changes --no-restore
@@ -47,12 +49,12 @@ jobs:
       - name: Test
         run: dotnet test Replica.sln -c Release --no-build --logger "trx;LogFilePrefix=replica" --results-directory TestResults
 
-      - name: Install Inno Setup 6.7.1
-        run: choco install innosetup --version=6.7.1 --yes --no-progress
+      - name: Audit vulnerable packages
+        run: dotnet list Replica.sln package --vulnerable --include-transitive --no-restore
 
-      - name: Verify Windows installer packaging
+      - name: Verify release automation contracts
         shell: powershell
-        run: ./scripts/build-release.ps1 -Version 0.1.0-alpha.1
+        run: ./scripts/test-release-automation.ps1
 
       - name: Upload test results
         if: always()

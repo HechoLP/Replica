@@ -11,7 +11,10 @@ param(
     [string] $IsccPath,
 
     [Parameter()]
-    [switch] $RunInstallTests
+    [switch] $RunInstallTests,
+
+    [Parameter()]
+    [switch] $SkipVerification
 )
 
 Set-StrictMode -Version Latest
@@ -102,13 +105,15 @@ try {
     Remove-ReleaseDirectory -Path $testResultsDirectory -ArtifactsRoot $artifactsRoot
     New-Item -ItemType Directory -Path $publishDirectory, $releaseDirectory, $testResultsDirectory -Force | Out-Null
 
-    Invoke-CheckedCommand $DotNetPath @('clean', $solutionPath, '-c', 'Release', '--nologo')
-    Invoke-CheckedCommand $DotNetPath @('restore', $solutionPath)
-    Invoke-CheckedCommand $DotNetPath @('format', $solutionPath, '--verify-no-changes', '--no-restore')
-    Invoke-CheckedCommand $DotNetPath @('build', $solutionPath, '-c', 'Release', '--no-restore')
-    Invoke-CheckedCommand $DotNetPath @(
-        'test', $solutionPath, '-c', 'Release', '--no-build',
-        '--logger', 'trx;LogFilePrefix=replica', '--results-directory', $testResultsDirectory)
+    if (!$SkipVerification) {
+        Invoke-CheckedCommand $DotNetPath @('clean', $solutionPath, '-c', 'Release', '--nologo')
+        Invoke-CheckedCommand $DotNetPath @('restore', $solutionPath)
+        Invoke-CheckedCommand $DotNetPath @('format', $solutionPath, '--verify-no-changes', '--no-restore')
+        Invoke-CheckedCommand $DotNetPath @('build', $solutionPath, '-c', 'Release', '--no-restore')
+        Invoke-CheckedCommand $DotNetPath @(
+            'test', $solutionPath, '-c', 'Release', '--no-build',
+            '--logger', 'trx;LogFilePrefix=replica', '--results-directory', $testResultsDirectory)
+    }
     Invoke-CheckedCommand $DotNetPath @(
         'publish', $appProject, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
         '--no-restore', '-o', $publishDirectory,
