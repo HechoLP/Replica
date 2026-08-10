@@ -95,6 +95,27 @@ public sealed class GitHubReleaseCatalogTests
     }
 
     [Fact]
+    public async Task GetCatalogAsync_RejectsJsonDepthAttack()
+    {
+        string nested = string.Concat(Enumerable.Repeat("{\"item\":", 40)) +
+            "0" + new string('}', 40);
+        using HttpClient client = new(new ResponseHandler(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"[{{\"attack\":{nested}}}]", Encoding.UTF8, "application/json"),
+            }));
+        GitHubReleaseSource source = new(
+            client,
+            ReleaseRepositoryOptions.Replica,
+            TimeProvider.System);
+
+        GitHubReleaseCatalogResult result = await source.GetCatalogAsync(CancellationToken.None);
+
+        Assert.Equal(GitHubReleaseCatalogStatus.InvalidResponse, result.Status);
+        Assert.Empty(result.Releases);
+    }
+
+    [Fact]
     public async Task GetCatalogAsync_ReportsNetworkFailure()
     {
         using HttpClient client = new(new ThrowingHandler());

@@ -89,4 +89,19 @@ public sealed class SnapshotBootstrapTests
         Assert.IsType<RollbackJournalService>(services.GetRequiredService<IRollbackService>());
         Assert.NotNull(services.GetRequiredService<RollbackViewModel>());
     }
+
+    [Fact]
+    public void ApplicationShipsWithoutTelemetrySubsystem()
+    {
+        Type[] productTypes =
+        [
+            .. typeof(AppBootstrapper).Assembly.GetTypes(),
+            .. typeof(IRestoreExecutor).Assembly.GetTypes(),
+            .. typeof(ReplicaSnapshotReader).Assembly.GetTypes(),
+        ];
+
+        Assert.DoesNotContain(
+            productTypes,
+            type => type.Name.Contains("Telemetry", StringComparison.OrdinalIgnoreCase));
+    }
 }

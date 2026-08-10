@@ -150,6 +150,28 @@ public sealed class WinGetInstallerTests
         Assert.Empty(process.Requests);
     }
 
+    [Theory]
+    [InlineData("Git.Git & calc.exe")]
+    [InlineData("--source")]
+    [InlineData("Git.Git;Remove-Item")]
+    [InlineData("Git.Git\" --override")]
+    public async Task InstallAsync_RejectsInjectedPackageIdentifier(string packageIdentifier)
+    {
+        FakeRestoreProcessRunner process = new(new ProcessExecutionResult(
+            0,
+            string.Empty,
+            string.Empty,
+            false,
+            false));
+        WinGetInstaller installer = CreateInstaller(process, new FakeApplicationScanner(Scan()));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => installer.InstallAsync(
+            Request() with { PackageIdentifier = packageIdentifier },
+            CancellationToken.None));
+
+        Assert.Empty(process.Requests);
+    }
+
     private static WinGetInstaller CreateInstaller(
         IProcessRunner process,
         IApplicationScanner scanner)

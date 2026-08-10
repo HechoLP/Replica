@@ -441,6 +441,8 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         foreach (RecoveryPathMapping mapping in mappings)
         {
             if (mapping is null ||
+                mapping.SourcePath.Any(char.IsControl) ||
+                mapping.TargetPath.Any(char.IsControl) ||
                 !Path.IsPathFullyQualified(mapping.SourcePath) ||
                 !Path.IsPathFullyQualified(mapping.TargetPath) ||
                 mapping.EstimatedBytes < 0 ||

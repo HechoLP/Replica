@@ -41,6 +41,13 @@ public sealed class UpdateInstallerService : IUpdateInstallerService
         cancellationToken.ThrowIfCancellationRequested();
         string installerPath = Path.GetFullPath(request.Download.InstallerPath);
         ValidateInstallerPath(installerPath);
+        await using FileStream executionLock = new(
+            installerPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
         FileInfo installer = new(installerPath);
         if (installer.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
             installer.Length != request.Download.FileSize)

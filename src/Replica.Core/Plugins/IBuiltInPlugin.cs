@@ -135,6 +135,7 @@ public sealed record PluginSnapshot(
 {
     public ReplicaPluginSnapshot ToReplicaSnapshot()
     {
+        ValidateForSnapshot();
         return new ReplicaPluginSnapshot(
             PluginId,
             PluginVersion,
@@ -149,6 +150,43 @@ public sealed record PluginSnapshot(
                 $"plugins/{PluginId}/{exclusion.LogicalPath}",
                 exclusion.ReasonCode,
                 exclusion.Description)).ToArray());
+    }
+
+    private void ValidateForSnapshot()
+    {
+        if (string.IsNullOrWhiteSpace(PluginId) || PluginId.Length > 128 ||
+            PluginId.Any(character => !char.IsLetterOrDigit(character) && character is not ('.' or '-')) ||
+            string.IsNullOrWhiteSpace(PluginVersion) || PluginVersion.Length > 64 ||
+            Values is null || Files is null || Exclusions is null || Warnings is null ||
+            Values.Count > 10_000 || Files.Count > 10_000 || Exclusions.Count > 10_000 ||
+            Values.Any(pair =>
+                string.IsNullOrWhiteSpace(pair.Key) || pair.Key.Length > 1024 ||
+                pair.Key.Any(char.IsControl) || pair.Value is null || pair.Value.Length > 1024 * 1024) ||
+            Files.Any(file => file is null || !IsSafeLogicalPath(file.LogicalPath) ||
+                file.Content is null || file.Content.Length > 1024 * 1024 ||
+                string.IsNullOrWhiteSpace(file.ContentType) || file.ContentType.Length > 128) ||
+            Files.Select(file => file.LogicalPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Files.Count ||
+            Exclusions.Any(exclusion => exclusion is null ||
+                !IsSafeLogicalPath(exclusion.LogicalPath) ||
+                string.IsNullOrWhiteSpace(exclusion.ReasonCode) || exclusion.ReasonCode.Length > 128))
+        {
+            throw new InvalidDataException("The built-in plugin snapshot contains invalid artifact metadata.");
+        }
+    }
+
+    private static bool IsSafeLogicalPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > 1024 ||
+            path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') ||
+            path.Contains(':') || Path.IsPathFullyQualified(path) || path.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        string[] segments = path.Split('/');
+        return segments.Length <= 32 && segments.All(segment =>
+            !string.IsNullOrWhiteSpace(segment) && segment is not ("." or "..") &&
+            !segment.EndsWith('.') && !segment.EndsWith(' '));
     }
 }
 

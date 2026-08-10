@@ -90,6 +90,28 @@ public sealed class ElevatedPlanStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ConsumeAsync_AllowsOnlyOneConcurrentConsumer()
+    {
+        MutableTimeProvider time = new(new DateTimeOffset(2026, 8, 5, 0, 0, 0, TimeSpan.Zero));
+        ElevatedPlanStore store = CreateStore(time);
+        FakeContext context = new("session-race");
+        RestoreAction action = AdministratorAction("admin-race");
+        ElevatedPlanCreationResult created = await store.CreateAsync(
+            Plan(action),
+            action,
+            context,
+            CancellationToken.None);
+
+        bool[] results = await Task.WhenAll(
+            TryConsumeAsync(store, created.LaunchRequest),
+            TryConsumeAsync(store, created.LaunchRequest));
+
+        Assert.Equal(1, results.Count(result => result));
+        Assert.Equal(1, results.Count(result => !result));
+        Assert.False(File.Exists(created.LaunchRequest.PlanFilePath));
+    }
+
+    [Fact]
     public void ElevatedExecutorArgumentsParser_RequiresExactRestrictedShape()
     {
         string[] valid =
@@ -168,6 +190,21 @@ public sealed class ElevatedPlanStoreTests : IDisposable
             request.PlanSha256,
             request.SingleUseToken,
             request.SessionId);
+    }
+
+    private static async Task<bool> TryConsumeAsync(
+        ElevatedPlanStore store,
+        ElevatedPlanLaunchRequest request)
+    {
+        try
+        {
+            _ = await store.ConsumeAsync(Arguments(request), CancellationToken.None);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private sealed class FakeContext(string sessionId) : IRestoreExecutionContext

@@ -12,6 +12,11 @@ namespace Replica.Infrastructure.Updates;
 public sealed class GitHubReleaseSource : IOfficialReleaseSource, IGitHubReleaseCatalog
 {
     private const int MaximumReleaseResponseBytes = 2 * 1024 * 1024;
+    private static readonly JsonSerializerOptions ReleaseJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        MaxDepth = 32,
+        PropertyNameCaseInsensitive = false,
+    };
     private static readonly TimeSpan ReleaseLookupTimeout = TimeSpan.FromSeconds(30);
     private readonly HttpClient httpClient;
     private readonly ReleaseRepositoryOptions repository;
@@ -144,7 +149,9 @@ public sealed class GitHubReleaseSource : IOfficialReleaseSource, IGitHubRelease
                 GitHubReleaseDto[] releases;
                 try
                 {
-                    releases = JsonSerializer.Deserialize<GitHubReleaseDto[]>(content) ?? [];
+                    releases = JsonSerializer.Deserialize<GitHubReleaseDto[]>(
+                        content,
+                        ReleaseJsonOptions) ?? [];
                 }
                 catch (JsonException)
                 {
