@@ -1,0 +1,191 @@
+name: Release
+
+run-name: Release ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing annotated v<SemVer> tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Validate, build, and package
+    runs-on: windows-latest
+    timeout-minutes: 40
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      file_version: ${{ steps.version.outputs.file_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      artifact_name: replica-release-${{ steps.version.outputs.version }}
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: true
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+
+      - name: Validate tag and project version
+        id: version
+        shell: powershell
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -GitHubOutputPath $env:GITHUB_OUTPUT
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore
+        run: dotnet restore Replica.sln
+
+      - name: Verify formatting
+        run: dotnet format Replica.sln --verify-no-changes --no-restore
+
+      - name: Build Release
+        run: dotnet build Replica.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }} -p:FileVersion=${{ steps.version.outputs.file_version }} -p:AssemblyVersion=${{ steps.version.outputs.file_version }} -p:InformationalVersion=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test Replica.sln -c Release --no-build --logger "trx;LogFilePrefix=replica-release" --results-directory TestResults
+
+      - name: Audit vulnerable packages
+        run: dotnet list Replica.sln package --vulnerable --include-transitive --no-restore
+
+      - name: Install Inno Setup 6.7.1
+        run: choco install innosetup --version=6.7.1 --yes --no-progress
+
+      - name: Publish self-contained application and build installer
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/build-release.ps1 -Version $env:RELEASE_VERSION -SkipVerification
+
+      - name: Prepare canonical GitHub Release Assets
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/prepare-release-assets.ps1 -Version $env:RELEASE_VERSION -ReleaseDirectory artifacts/release -OutputDirectory artifacts/release-package
+
+      - name: Upload release package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: replica-release-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/release-package/ReplicaSetup-${{ steps.version.outputs.version }}.exe
+            artifacts/release-package/ReplicaSetup-${{ steps.version.outputs.version }}.exe.sha256
+            artifacts/release-package/ReplicaSetup.exe
+            artifacts/release-package/ReplicaSetup.exe.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload release test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-test-results-${{ steps.version.outputs.version || github.run_id }}
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+          retention-days: 7
+
+  attest:
+    name: Attest installer provenance
+    if: github.event.repository.visibility == 'public'
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download release package
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.package.outputs.artifact_name }}
+          path: release-package
+
+      - name: Attest ReplicaSetup.exe
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: release-package/ReplicaSetup.exe
+
+  release:
+    name: Publish GitHub Release
+    if: always() && needs.package.result == 'success' && (needs.attest.result == 'success' || needs.attest.result == 'skipped')
+    needs:
+      - package
+      - attest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download verified release package
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.package.outputs.artifact_name }}
+          path: release-package
+
+      - name: Verify installer SHA-256
+        shell: pwsh
+        run: |
+          $expected = (Get-Content -LiteralPath release-package/ReplicaSetup.exe.sha256 -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+          $actual = (Get-FileHash -LiteralPath release-package/ReplicaSetup.exe -Algorithm SHA256).Hash
+          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'ReplicaSetup.exe failed SHA-256 verification before publication.'
+          }
+
+      - name: Create immutable GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.package.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.package.outputs.version }}
+          RELEASE_PRERELEASE: ${{ needs.package.outputs.prerelease }}
+        run: |
+          $arguments = @(
+            'release', 'create', $env:RELEASE_TAG,
+            '--repo', $env:GITHUB_REPOSITORY,
+            '--verify-tag',
+            '--title', "Replica $env:RELEASE_VERSION",
+            '--generate-notes',
+            '--notes', "> [!WARNING]`n> This Replica installer is **Unsigned**. Verify ReplicaSetup.exe.sha256 before running it.",
+            'release-package/ReplicaSetup.exe',
+            'release-package/ReplicaSetup.exe.sha256')
+          if ($env:RELEASE_PRERELEASE -eq 'true') {
+            $arguments += '--prerelease'
+          }
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release creation failed with exit code $LASTEXITCODE."
+          }

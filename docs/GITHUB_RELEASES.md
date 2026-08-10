@@ -22,6 +22,12 @@ The release workflow is tag-driven and must:
 
 Workflow permissions default to read-only and grant `contents: write` only to the release publishing job. Third-party actions are pinned to immutable revisions where practical. Release creation must be idempotent or fail safely without replacing an existing asset silently.
 
+The implementation lives in `.github/workflows/release.yml`. A tag push or manual dispatch accepts only an existing annotated tag matching `v<major>.<minor>.<patch>` with an optional `alpha.N`, `beta.N`, or `rc.N` suffix. The tag must point at the checked-out commit and its version must exactly match `VersionPrefix` plus `VersionSuffix` in `Directory.Build.props`; no workflow creates a tag.
+
+The Windows packaging job retains `ReplicaSetup-<Version>.exe` in its short-lived Actions Artifact for traceability. It copies the same verified bytes to the only installer Asset published to GitHub Releases, `ReplicaSetup.exe`, and generates `ReplicaSetup.exe.sha256` from those bytes. Alpha, beta, and RC tags become pre-releases. Stable tags become normal releases. Release notes are generated from reviewed history and start with the required **Unsigned** warning until production Authenticode signing is configured.
+
+Installer provenance attestation runs when the repository visibility and GitHub plan support public Artifact Attestations. Attestation has only `id-token: write` and `attestations: write`; the separate publication job alone receives `contents: write`. A failed validation, build, test, dependency audit, package check, hash check, or supported attestation blocks publication.
+
 ## Update checks
 
 Replica queries the GitHub Releases API for the configured owner `HechoLP` and repository `Replica`. Stable is the default. Beta permits beta and RC releases but excludes alpha; Alpha permits every supported prerelease. A selected channel never receives a more unstable automatic suggestion. Strict semantic-version parsing prevents an unknown tag format from becoming an update.
