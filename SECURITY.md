@@ -16,7 +16,7 @@ Replica has not published a Stable Release. Pre-release builds are for testing a
 
 Do not open a public issue and do not attach a malicious `.replica` file, credentials, logs containing private data, or affected user files to an issue or pull request.
 
-GitHub Private Vulnerability Reporting is not currently enabled for this repository. Contact the repository owner, [HechoLP](https://github.com/HechoLP), through a private contact method published on that profile. Include only a minimal, synthetic reproduction initially. If no private contact method is available, open a public issue containing only the words **Private security contact requested** and no technical details; the owner can arrange a private channel.
+Use GitHub's **Privately report a security vulnerability** action on the repository Security page. Do not open a public issue for a suspected vulnerability. If Private Vulnerability Reporting is temporarily unavailable, contact the repository owner, [HechoLP](https://github.com/HechoLP), through a private contact method published on that profile and initially include only a minimal, synthetic reproduction.
 
 Useful initial information includes:
 
