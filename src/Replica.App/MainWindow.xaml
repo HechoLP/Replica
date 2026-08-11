@@ -105,32 +105,42 @@
                 </Grid>
             </Border>
 
-            <TabControl Grid.Row="1"
-                        SelectedIndex="{Binding CurrentPageIndex, Mode=OneWay}"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        KeyboardNavigation.TabNavigation="Continue">
-                <TabControl.Template>
-                    <ControlTemplate TargetType="TabControl">
-                        <ContentPresenter Content="{TemplateBinding SelectedContent}"
-                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}"
-                                          ContentStringFormat="{TemplateBinding SelectedContentStringFormat}" />
-                    </ControlTemplate>
-                </TabControl.Template>
-                <TabItem><views:HomeView /></TabItem>
-                <TabItem><views:ScanView /></TabItem>
-                <TabItem><views:SnapshotBuilderView DataContext="{Binding SnapshotBuilder}" /></TabItem>
-                <TabItem><views:ComparisonView /></TabItem>
-                <TabItem><views:DiffWorkspaceView DataContext="{Binding DiffViewer}" /></TabItem>
-                <TabItem><views:RestorePlanView DataContext="{Binding RestoreDryRun}" /></TabItem>
-                <TabItem><views:RecoveryWorkspaceView DataContext="{Binding RecoveryWizard}" /></TabItem>
-                <TabItem><views:ExecutionView DataContext="{Binding Execution}" /></TabItem>
-                <TabItem><views:ResultView DataContext="{Binding Result}" /></TabItem>
-                <TabItem><views:HistoryView DataContext="{Binding SnapshotHistory}" /></TabItem>
-                <TabItem><views:SettingsView DataContext="{Binding Settings}" /></TabItem>
-                <TabItem><views:AboutView /></TabItem>
-                <TabItem><views:UpdateView DataContext="{Binding Update}" /></TabItem>
-            </TabControl>
+            <ContentControl Grid.Row="1" Content="{Binding}" KeyboardNavigation.TabNavigation="Continue">
+                <ContentControl.Resources>
+                    <DataTemplate x:Key="HomePageTemplate"><views:HomeView /></DataTemplate>
+                    <DataTemplate x:Key="ScanPageTemplate"><views:ScanView /></DataTemplate>
+                    <DataTemplate x:Key="SnapshotBuilderPageTemplate"><views:SnapshotBuilderView DataContext="{Binding SnapshotBuilder}" /></DataTemplate>
+                    <DataTemplate x:Key="ComparisonPageTemplate"><views:ComparisonView /></DataTemplate>
+                    <DataTemplate x:Key="DiffViewerPageTemplate"><views:DiffWorkspaceView DataContext="{Binding DiffViewer}" /></DataTemplate>
+                    <DataTemplate x:Key="RestorePlanPageTemplate"><views:RestorePlanView DataContext="{Binding RestoreDryRun}" /></DataTemplate>
+                    <DataTemplate x:Key="RecoveryPageTemplate"><views:RecoveryWorkspaceView DataContext="{Binding RecoveryWizard}" /></DataTemplate>
+                    <DataTemplate x:Key="ExecutionPageTemplate"><views:ExecutionView DataContext="{Binding Execution}" /></DataTemplate>
+                    <DataTemplate x:Key="ResultPageTemplate"><views:ResultView DataContext="{Binding Result}" /></DataTemplate>
+                    <DataTemplate x:Key="HistoryPageTemplate"><views:HistoryView DataContext="{Binding SnapshotHistory}" /></DataTemplate>
+                    <DataTemplate x:Key="SettingsPageTemplate"><views:SettingsView DataContext="{Binding Settings}" /></DataTemplate>
+                    <DataTemplate x:Key="AboutPageTemplate"><views:AboutView /></DataTemplate>
+                    <DataTemplate x:Key="UpdatePageTemplate"><views:UpdateView DataContext="{Binding Update}" /></DataTemplate>
+                </ContentControl.Resources>
+                <ContentControl.Style>
+                    <Style TargetType="ContentControl">
+                        <Setter Property="ContentTemplate" Value="{StaticResource HomePageTemplate}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="1"><Setter Property="ContentTemplate" Value="{StaticResource ScanPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="2"><Setter Property="ContentTemplate" Value="{StaticResource SnapshotBuilderPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="3"><Setter Property="ContentTemplate" Value="{StaticResource ComparisonPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="4"><Setter Property="ContentTemplate" Value="{StaticResource DiffViewerPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="5"><Setter Property="ContentTemplate" Value="{StaticResource RestorePlanPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="6"><Setter Property="ContentTemplate" Value="{StaticResource RecoveryPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="7"><Setter Property="ContentTemplate" Value="{StaticResource ExecutionPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="8"><Setter Property="ContentTemplate" Value="{StaticResource ResultPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="9"><Setter Property="ContentTemplate" Value="{StaticResource HistoryPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="10"><Setter Property="ContentTemplate" Value="{StaticResource SettingsPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="11"><Setter Property="ContentTemplate" Value="{StaticResource AboutPageTemplate}" /></DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPageIndex}" Value="12"><Setter Property="ContentTemplate" Value="{StaticResource UpdatePageTemplate}" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ContentControl.Style>
+            </ContentControl>
 
             <Border Grid.Row="2" Padding="24,9" Background="{DynamicResource FooterBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                 <TextBlock AutomationProperties.LiveSetting="Polite"
