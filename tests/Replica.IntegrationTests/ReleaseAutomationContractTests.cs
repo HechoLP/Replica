@@ -88,6 +88,21 @@ public sealed partial class ReleaseAutomationContractTests
         Assert.DoesNotContain("Invoke-Expression", assets, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void InstallerSandbox_IsOfflineReadOnlyAndRunsTheFixedInstallerSmokeTest()
+    {
+        string sandbox = File.ReadAllText(RepositoryFile("scripts", "test-installer-sandbox.ps1"));
+
+        Assert.Contains("WindowsSandbox.exe", sandbox, StringComparison.Ordinal);
+        Assert.Contains("<ReadOnly>true</ReadOnly>", sandbox, StringComparison.Ordinal);
+        Assert.Contains("<Networking>Disable</Networking>", sandbox, StringComparison.Ordinal);
+        Assert.Contains("<ClipboardRedirection>Disable</ClipboardRedirection>", sandbox, StringComparison.Ordinal);
+        Assert.Contains("test-installer.ps1", sandbox, StringComparison.Ordinal);
+        Assert.Contains("'-Install'", sandbox, StringComparison.Ordinal);
+        Assert.Contains("sandbox-installer-test", sandbox, StringComparison.Ordinal);
+        Assert.DoesNotContain("Invoke-Expression", sandbox, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void AssertOrdered(string value, params string[] markers)
     {
         int previous = -1;

@@ -253,9 +253,11 @@ internal sealed class RecoveryPayloadMaterializer
         }
         catch (IOException)
         {
+            // Best-effort cleanup; the caller removes the bounded materialization root later.
         }
         catch (UnauthorizedAccessException)
         {
+            // Cleanup failure does not make the materialized payload eligible for restore.
         }
     }
 }

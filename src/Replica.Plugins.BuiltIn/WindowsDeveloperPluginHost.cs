@@ -346,6 +346,7 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException)
         {
+            // Application detection is read-only and reports the executable as unavailable.
         }
 
         return null;
@@ -475,6 +476,7 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         }
         catch (InvalidOperationException)
         {
+            // The process exited between the state check and the bounded kill request.
         }
     }
 }

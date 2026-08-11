@@ -165,9 +165,11 @@ public sealed class JsonRecoverySessionStore : IRecoverySessionStore
         }
         catch (IOException)
         {
+            // Best-effort cleanup; an incomplete sibling file is never accepted as session state.
         }
         catch (UnauthorizedAccessException)
         {
+            // Cleanup failure does not bypass the session envelope checksum on the next load.
         }
     }
 
