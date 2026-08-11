@@ -101,7 +101,7 @@ The installer is self-contained for Windows 11 `win-x64`; users do not separatel
 
 ## Roadmap
 
-The next release gates include public release validation, clean-VM recovery and rollback checks, private vulnerability reporting, production code signing, and progression through alpha, beta, and release-candidate channels before Stable. See the complete [roadmap](docs/ROADMAP.md).
+The next release gates include broader clean-VM recovery and rollback checks, production code signing, and progression through alpha, beta, and release-candidate channels before Stable. See the complete [roadmap](docs/ROADMAP.md).
 
 ## Development
 
