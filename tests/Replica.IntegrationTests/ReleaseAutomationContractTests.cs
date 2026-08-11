@@ -73,6 +73,16 @@ public sealed partial class ReleaseAutomationContractTests
     }
 
     [Fact]
+    public void WorkflowActionPins_AcceptVersionCommentsWithoutRelaxingCommitPins()
+    {
+        const string pinnedReference =
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1";
+
+        Assert.Matches(ImmutableActionReference(), pinnedReference);
+        Assert.DoesNotMatch(ImmutableActionReference(), "actions/checkout@v7.0.1");
+    }
+
+    [Fact]
     public void ReleaseScripts_VerifyTagVersionInstallerNamesAndChecksumsWithoutDynamicEvaluation()
     {
         string validator = File.ReadAllText(RepositoryFile("scripts", "validate-release-version.ps1"));
@@ -142,6 +152,6 @@ public sealed partial class ReleaseAutomationContractTests
         return Path.Combine([directory!.FullName, .. segments]);
     }
 
-    [GeneratedRegex("^(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+@[0-9a-f]{40}(?:\\s+#\\s+v[0-9]+)?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+@[0-9a-f]{40}(?:\\s+#\\s+v[0-9]+(?:\\.[0-9]+){0,2})?$", RegexOptions.CultureInvariant)]
     private static partial Regex ImmutableActionReference();
 }
