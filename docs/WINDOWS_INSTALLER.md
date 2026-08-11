@@ -20,6 +20,14 @@ artifacts/release/
 
 Pass `-RunInstallTests` only on a clean Windows test account or disposable VM. This opt-in smoke test installs Replica, launches the exact installed executable, verifies the `.replica` association, performs an in-place upgrade, uninstalls, and proves that user data remains. Automated xUnit tests never install software or change the registry.
 
+When Windows Sandbox is enabled, the same smoke test can be run without changing the host installation:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-sandbox.ps1 -Version 0.1.0-alpha.1
+```
+
+The Sandbox runner disables networking and clipboard redirection, maps the repository read-only, writes only generated evidence beneath `artifacts/sandbox-installer-test`, and shuts down the disposable Sandbox after the test. It validates installation, launch, `.replica` association, same-version upgrade, uninstall, displayed product version, and default user-data retention.
+
 Snapshot creation/opening is covered by snapshot round-trip tests and the file-association argument/indexing tests. A release candidate must additionally complete the GUI checklist in a clean Windows 11 VM.
 
 ## Installation behavior
