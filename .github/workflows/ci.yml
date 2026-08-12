@@ -68,3 +68,71 @@ jobs:
           path: TestResults/**/*.trx
           if-no-files-found: warn
           retention-days: 7
+
+  macos-build-and-test:
+    name: macOS build and test
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: true
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Packages.props
+            src/Replica.Core/Replica.Core.csproj
+            src/Replica.Storage/Replica.Storage.csproj
+            src/Replica.Mac.Infrastructure/Replica.Mac.Infrastructure.csproj
+            src/Replica.Mac/Replica.Mac.csproj
+            tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
+
+      - name: Restore macOS projects
+        run: dotnet restore tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
+
+      - name: Verify macOS formatting
+        run: dotnet format tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj --verify-no-changes --no-restore
+
+      - name: Build macOS projects
+        run: dotnet build tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-restore
+
+      - name: Test macOS projects
+        run: dotnet test tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=replica-macos" --results-directory TestResults
+
+      - name: Read project version
+        id: project-version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/Replica.Mac/Replica.Mac.csproj -getProperty:Version -nologo).Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Project version is unavailable.' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build and verify Apple Silicon DMG
+        shell: pwsh
+        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture arm64
+
+      - name: Verify macOS package checksum
+        shell: pwsh
+        run: |
+          $name = 'Replica-macOS-arm64.dmg'
+          $expected = (Get-Content -LiteralPath "artifacts/macos-release/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+          $actual = (Get-FileHash -LiteralPath "artifacts/macos-release/$name" -Algorithm SHA256).Hash
+          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'macOS CI package hash mismatch.' }
+
+      - name: Upload macOS test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: macos-test-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+          retention-days: 7

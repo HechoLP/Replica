@@ -2,7 +2,7 @@
 
 ## Official channel
 
-Official Replica builds are published only from `HechoLP/Replica` GitHub Releases. The single user-facing download is `ReplicaSetup.exe`; SHA-256 checksum material accompanies it. Internal DLLs and the self-contained .NET runtime may be inside the installed product but are not separate prerequisites.
+Official Replica builds are published only from `HechoLP/Replica` GitHub Releases. Users download one package for their platform: `ReplicaSetup.exe`, `Replica-macOS-arm64.dmg`, or `Replica-macOS-x64.dmg`. SHA-256 material accompanies each package. Internal DLLs and the self-contained .NET runtime are not separate prerequisites.
 
 ## Version and channel policy
 
@@ -12,19 +12,19 @@ The release workflow is tag-driven and must:
 
 1. verify tag/version consistency and a clean source revision;
 2. restore with a locked dependency graph where supported;
-3. run formatting checks, Release build, and all automated tests on `windows-latest` with .NET 10;
-4. publish self-contained `win-x64` application output;
-5. build `ReplicaSetup.exe` with Inno Setup;
-6. verify installer presence and basic install/package assertions;
-7. compute SHA-256 checksums;
+3. run Windows and macOS formatting, Release builds, and automated tests with .NET 10;
+4. publish self-contained `win-x64`, `osx-arm64`, and `osx-x64` application output;
+5. build `ReplicaSetup.exe` with Inno Setup and architecture-specific macOS DMGs;
+6. verify package presence, bundle metadata, executable permissions, and package assertions;
+7. compute SHA-256 checksums for every package;
 8. generate release notes from reviewed repository history;
-9. publish artifacts only after every required job succeeds.
+9. publish all platform Assets only after every required job succeeds.
 
 Workflow permissions default to read-only and grant `contents: write` only to the release publishing job. Third-party actions are pinned to immutable revisions where practical. Release creation must be idempotent or fail safely without replacing an existing asset silently.
 
 The implementation lives in `.github/workflows/release.yml`. A tag push or manual dispatch accepts only an existing annotated tag matching `v<major>.<minor>.<patch>` with an optional `alpha.N`, `beta.N`, or `rc.N` suffix. The tag must point at the checked-out commit and its version must exactly match `VersionPrefix` plus `VersionSuffix` in `Directory.Build.props`; no workflow creates a tag.
 
-The Windows packaging job retains `ReplicaSetup-<Version>.exe` in its short-lived Actions Artifact for traceability. It copies the same verified bytes to the only installer Asset published to GitHub Releases, `ReplicaSetup.exe`, and generates `ReplicaSetup.exe.sha256` from those bytes. Alpha, beta, and RC tags become pre-releases. Stable tags become normal releases. Release notes are generated from reviewed history and start with the required **Unsigned** warning until production Authenticode signing is configured.
+The Windows packaging job retains `ReplicaSetup-<Version>.exe` in its short-lived Actions Artifact for traceability and publishes the same verified bytes as `ReplicaSetup.exe`. macOS jobs independently construct and verify ARM64 and x64 DMGs. Alpha, beta, and RC tags become pre-releases. Stable tags become normal releases. Notes mark Windows as **Unsigned** until Authenticode is configured and macOS as ad-hoc signed and **not notarized** until Apple Developer ID signing is configured.
 
 Installer provenance attestation runs when the repository visibility and GitHub plan support public Artifact Attestations. Attestation has only `id-token: write` and `attestations: write`; the separate publication job alone receives `contents: write`. A failed validation, build, test, dependency audit, package check, hash check, or supported attestation blocks publication.
 

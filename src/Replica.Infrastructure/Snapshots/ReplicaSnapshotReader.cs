@@ -281,6 +281,7 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
                 StringComparison.Ordinal) ||
             manifest.SnapshotId == Guid.Empty ||
             !Enum.IsDefined(manifest.SnapshotType) ||
+            !Enum.IsDefined(manifest.SourcePlatform) ||
             manifest.CreatedAtUtc.Offset != TimeSpan.Zero ||
             string.IsNullOrWhiteSpace(manifest.ProductVersion) ||
             string.IsNullOrWhiteSpace(manifest.SourceMachineName) ||
@@ -318,7 +319,10 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
             !string.Equals(
                 manifest.Locale,
                 manifest.Metadata.Machine.Locale,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal) ||
+            manifest.SourcePlatform != ReplicaPlatformFamily.Windows &&
+            (manifest.Metadata.Machine.Platform is null ||
+             manifest.Metadata.Machine.Platform.Family != manifest.SourcePlatform))
         {
             throw new ReplicaSnapshotException("The snapshot manifest is invalid or unsupported.");
         }

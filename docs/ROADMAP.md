@@ -46,10 +46,14 @@ Complete history/settings/about UX, accessibility, localization, update checks, 
 
 Publish `v0.1.0-alpha.1`, collect opt-in diagnostics and compatibility feedback, progress through beta and RC exit criteria, enable private vulnerability reporting, establish code signing, and publish stable only after recovery and rollback success criteria are met.
 
+## 11. macOS Preview
+
+Extract portable Core and Snapshot storage, add an Avalonia app for macOS 13+, inventory application bundles/Homebrew/environment/PATH/fonts without mutation, create and validate Lightweight Snapshots, and publish self-contained ARM64/x64 DMGs. Typed macOS restore planning, journaling, encryption-password UI, notarization, and recovery remain later gated milestones.
+
 ## Milestone gates
 
 - No writer ships before the planner and dry-run review.
 - No mutation ships without journal-before-change behavior and mock-based failure tests.
-- No public installer ships unless CI builds, tests, packages, and checksums one `ReplicaSetup.exe`.
+- No public installer ships unless CI builds, tests, packages, and checksums `ReplicaSetup.exe` plus both macOS architecture DMGs.
 - No stable release ships without signed artifacts or an explicitly approved, prominently documented exception.
 - Unsupported recovery stays visible and manual; roadmap pressure does not justify silent best-effort mutation.

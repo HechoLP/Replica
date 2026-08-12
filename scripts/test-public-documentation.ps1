@@ -64,11 +64,13 @@ if ($brokenLinks.Count -gt 0) {
 
 $readme = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $repositoryRoot 'README.md')
 $requiredReadmeText = @(
-    'Clone your Windows setup, not your files.',
-    'Replica is a Windows environment migration and recovery tool that restores only what is missing or different.',
+    'Clone your setup, not your files.',
+    'Replica is a Windows and macOS environment snapshot, migration, and recovery tool.',
     'https://github.com/HechoLP/Replica',
     'https://github.com/HechoLP/Replica/releases',
     'ReplicaSetup.exe',
+    'Replica-macOS-arm64.dmg',
+    'Replica-macOS-x64.dmg',
     'Source code (zip)',
     'Stable',
     'Alpha',

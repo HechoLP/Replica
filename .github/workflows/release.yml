@@ -113,10 +113,86 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  package-macos:
+    name: Package macOS (${{ matrix.architecture }})
+    runs-on: macos-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture:
+          - arm64
+          - x64
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: true
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+
+      - name: Validate tag and project version
+        id: version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -GitHubOutputPath $env:GITHUB_OUTPUT
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Packages.props
+            src/Replica.Core/Replica.Core.csproj
+            src/Replica.Storage/Replica.Storage.csproj
+            src/Replica.Mac.Infrastructure/Replica.Mac.Infrastructure.csproj
+            src/Replica.Mac/Replica.Mac.csproj
+            tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
+
+      - name: Restore macOS projects
+        run: dotnet restore tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
+
+      - name: Build and test macOS projects
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dotnet build tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-restore -p:Version=$env:RELEASE_VERSION -p:InformationalVersion=$env:RELEASE_VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'macOS build failed.' }
+          dotnet test tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { throw 'macOS tests failed.' }
+
+      - name: Create self-contained app bundle and DMG
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/build-macos-release.ps1 -Version $env:RELEASE_VERSION -Architecture ${{ matrix.architecture }}
+
+      - name: Upload macOS release package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: replica-macos-${{ steps.version.outputs.version }}-${{ matrix.architecture }}
+          path: |
+            artifacts/macos-release/Replica-macOS-${{ matrix.architecture }}.dmg
+            artifacts/macos-release/Replica-macOS-${{ matrix.architecture }}.dmg.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
   attest:
     name: Attest installer provenance
     if: github.event.repository.visibility == 'public'
-    needs: package
+    needs:
+      - package
+      - package-macos
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -132,16 +208,24 @@ jobs:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
 
-      - name: Attest ReplicaSetup.exe
+      - name: Download macOS release packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: replica-macos-${{ needs.package.outputs.version }}-*
+          path: release-package
+          merge-multiple: true
+
+      - name: Attest release artifacts
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
-          subject-path: release-package/ReplicaSetup.exe
+          subject-path: release-package/*
 
   release:
     name: Publish GitHub Release
-    if: always() && needs.package.result == 'success' && (needs.attest.result == 'success' || needs.attest.result == 'skipped')
+    if: always() && needs.package.result == 'success' && needs.package-macos.result == 'success' && (needs.attest.result == 'success' || needs.attest.result == 'skipped')
     needs:
       - package
+      - package-macos
       - attest
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -156,6 +240,13 @@ jobs:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
 
+      - name: Download verified macOS packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: replica-macos-${{ needs.package.outputs.version }}-*
+          path: release-package
+          merge-multiple: true
+
       - name: Verify installer SHA-256
         shell: pwsh
         run: |
@@ -163,6 +254,15 @@ jobs:
           $actual = (Get-FileHash -LiteralPath release-package/ReplicaSetup.exe -Algorithm SHA256).Hash
           if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
             throw 'ReplicaSetup.exe failed SHA-256 verification before publication.'
+          }
+          foreach ($architecture in @('arm64', 'x64')) {
+            $name = "Replica-macOS-$architecture.dmg"
+            $checksum = "release-package/$name.sha256"
+            $expected = (Get-Content -LiteralPath $checksum -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+            $actual = (Get-FileHash -LiteralPath "release-package/$name" -Algorithm SHA256).Hash
+            if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "$name failed SHA-256 verification before publication."
+            }
           }
 
       - name: Create immutable GitHub Release
@@ -179,9 +279,13 @@ jobs:
             '--verify-tag',
             '--title', "Replica $env:RELEASE_VERSION",
             '--generate-notes',
-            '--notes', "> [!WARNING]`n> This Replica installer is **Unsigned**. Verify ReplicaSetup.exe.sha256 before running it.",
+            '--notes', "> [!WARNING]`n> The Windows installer is **Unsigned**. The macOS apps are ad-hoc signed and **not notarized**. Verify the matching SHA-256 file before opening a download.",
             'release-package/ReplicaSetup.exe',
-            'release-package/ReplicaSetup.exe.sha256')
+            'release-package/ReplicaSetup.exe.sha256',
+            'release-package/Replica-macOS-arm64.dmg',
+            'release-package/Replica-macOS-arm64.dmg.sha256',
+            'release-package/Replica-macOS-x64.dmg',
+            'release-package/Replica-macOS-x64.dmg.sha256')
           if ($env:RELEASE_PRERELEASE -eq 'true') {
             $arguments += '--prerelease'
           }

@@ -2,13 +2,13 @@
 
 ## Summary
 
-Replica helps one person reconstruct a familiar Windows 11 setup after a clean installation. It records a portable description of the setup, compares that description with the current computer, proposes supported recovery actions, and executes only approved actions with verification and rollback evidence.
+Replica helps one person record a familiar desktop setup and, on Windows 11, reconstruct supported differences after a clean installation. Windows compares the portable description with the current computer, proposes supported recovery actions, and executes only approved actions with verification and rollback evidence. The macOS 13+ Preview is deliberately read-only and creates validated Lightweight Snapshots without promising restore parity.
 
 Replica does not copy Windows itself and does not promise byte-for-byte machine cloning. Its unit of recovery is a known application, setting, environment entry, font, development tool, or explicitly selected file.
 
 ## Target user and primary journey
 
-The initial target is a technically comfortable Windows user preparing for a clean install or moving to a replacement PC.
+The full recovery target is a technically comfortable Windows user preparing for a clean install or moving to a replacement PC. A Mac user can scan application bundles, Homebrew inventory, non-sensitive environment/PATH data, and font metadata, then create or inspect a Lightweight Snapshot without changing the Mac.
 
 1. Scan the current PC.
 2. Review exclusions and create a Recovery Snapshot.
@@ -36,6 +36,8 @@ Replica will inventory:
 
 Replica will create, read, validate, optionally encrypt, compare, and restore supported `.replica` snapshots. It will show confidence, risk, privilege, restart, rollback, manual-action, and compatibility information before execution.
 
+The macOS Preview creates and validates unencrypted Lightweight Snapshots and can inspect unencrypted Snapshot metadata. Recovery payload capture, encryption-password UI, comparison-to-restore, execution, elevation, restart/resume, and rollback remain Windows-only until typed macOS policies and journals exist.
+
 ## Restore modes
 
 - **Safe** installs missing supported applications only. It preserves extras, blocks downgrades/removals, and asks about conflicts. This is the default.
@@ -56,14 +58,14 @@ Replica will create, read, validate, optionally encrypt, compare, and restore su
 
 - A first-time user can understand the three snapshot types and Safe/Recommended/Exact modes without documentation.
 - Every proposed machine mutation is visible in a dry run and carries risk, elevation, restart, rollback, dependency, and support metadata.
-- A valid snapshot can be moved between supported Windows 11 machines and reliably validated before use.
+- A valid snapshot can be moved between supported clients and reliably validated before use; restoration is permitted only on a platform with explicit typed support.
 - Partial scans and restores preserve useful results and clearly report failures.
 - The default workflow excludes sensitive information and requires explicit selection for user files.
-- CI produces one tested, checksummed installer artifact for a tagged release.
+- CI produces tested, checksummed Windows x64, macOS ARM64, and macOS x64 installer artifacts for a tagged release.
 
 ## Constraints and open questions
 
-- Initial runtime and UI architecture are Windows-only and `win-x64` self-contained.
+- Windows is `win-x64` self-contained; macOS Preview packages are `osx-arm64` and `osx-x64` self-contained Avalonia app bundles.
 - Code signing is desirable but not assumed. Unsigned builds must say so clearly.
 - The repository owner must select a license before accepting external reuse or contributions.
 - Supported application settings need an allow-listed plugin model; generic registry or AppData copying is outside the safe default.

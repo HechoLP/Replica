@@ -13,7 +13,8 @@ public sealed record ReplicaSnapshotManifest(
     IReadOnlyList<string> Capabilities,
     IReadOnlyList<ReplicaExclusion> Exclusions,
     ReplicaSnapshotMetadata Metadata,
-    ReplicaSnapshotEncryptionInfo? Encryption = null)
+    ReplicaSnapshotEncryptionInfo? Encryption = null,
+    ReplicaPlatformFamily SourcePlatform = ReplicaPlatformFamily.Windows)
 {
     public const string CurrentSchemaVersion = "1.0";
 }
@@ -22,6 +23,12 @@ public sealed record ReplicaSnapshotMetadata(
     ReplicaMachineInfo Machine,
     IReadOnlyList<ReplicaArtifact> Artifacts,
     Replica.Core.Recovery.ReplicaHardwareInfo? Hardware = null);
+
+public enum ReplicaPlatformFamily
+{
+    Windows,
+    MacOS,
+}
 
 public sealed record ReplicaSnapshotEncryptionInfo(
     string Algorithm,
