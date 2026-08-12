@@ -122,7 +122,10 @@ internal sealed class TemporaryDirectory : IDisposable
 {
     public TemporaryDirectory()
     {
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ReplicaMacTests-{Guid.NewGuid():N}");
+        string root = OperatingSystem.IsMacOS()
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : System.IO.Path.GetTempPath();
+        Path = System.IO.Path.Combine(root, $".ReplicaMacTests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path);
     }
 
