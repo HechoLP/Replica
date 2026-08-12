@@ -4,12 +4,13 @@ These instructions apply to the entire repository.
 
 ## Product invariants
 
-- Replica is one user-facing Windows application. Do not introduce a separately installed helper, service, runtime, plugin manager, or database product.
-- The supported client is Windows 11. The planned implementation stack is C#, .NET 10 LTS, WPF, MVVM, SQLite, `System.Text.Json`, ZIP-based `.replica` archives, winget, Inno Setup, and xUnit.
-- GitHub Releases is the only official distribution channel. The user downloads one artifact: `ReplicaSetup.exe`.
+- Replica is one user-facing application on each supported desktop platform. Do not introduce a separately installed helper, service, runtime, plugin manager, or database product.
+- Supported clients are Windows 11 and macOS 13 or later. The implementation stack is C#, .NET 10 LTS, WPF on Windows, Avalonia on macOS, MVVM, SQLite, `System.Text.Json`, ZIP-based `.replica` archives, winget/Homebrew inventory, Inno Setup/DMG packaging, and xUnit.
+- GitHub Releases is the only official distribution channel. Users download the one installer appropriate for their platform and architecture: `ReplicaSetup.exe`, `Replica-macOS-arm64.dmg`, or `Replica-macOS-x64.dmg`.
 - Every system-changing operation must support a dry run and require review of a typed restore plan before execution.
 - Prefer mocks and fakes in automated tests. Tests must never install software or alter the real registry, environment, PATH, fonts, or user files.
 - Use least privilege. Keep the normal UI unelevated and elevate the same executable only for the smallest approved set of administrator actions.
+- macOS support is currently read-only Preview scope: scan, Lightweight Snapshot creation/validation, Snapshot inspection, and update lookup. Do not expose Windows restore handlers on macOS or imply restore parity until platform-specific typed planning, journaling, and verification are implemented.
 
 ## Safety and privacy
 

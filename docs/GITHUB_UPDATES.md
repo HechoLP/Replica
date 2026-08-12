@@ -2,6 +2,8 @@
 
 Replica uses `HechoLP/Replica` GitHub Releases as its only update catalog and installer source. Update checks are read-only. Downloading and starting an installer are separate, explicitly approved operations.
 
+The Windows client implements the full approved download and installer handoff described below. The macOS Preview performs catalog lookup only, selects `Replica-macOS-arm64.dmg` or `Replica-macOS-x64.dmg` for the running architecture, and opens the official Release page on request. It does not silently download, mount, or run a DMG.
+
 ## Channels and versions
 
 The default channel is Stable:

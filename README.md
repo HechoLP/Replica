@@ -1,12 +1,12 @@
 # Replica
 
-> Clone your Windows setup, not your files.
+> Clone your setup, not your files.
 
-Replica is a Windows environment migration and recovery tool that restores only what is missing or different.
+Replica is a Windows and macOS environment snapshot, migration, and recovery tool. Windows restores only what is missing or different; the current macOS Preview safely scans and creates Lightweight Snapshots without changing the Mac.
 
 [![CI](https://github.com/HechoLP/Replica/actions/workflows/ci.yml/badge.svg)](https://github.com/HechoLP/Replica/actions/workflows/ci.yml)
 
-Replica records the parts of a Windows 11 environment that can be safely reconstructed, compares a Snapshot with the current computer, and turns approved differences into a typed restore plan. It is not a disk image, a full-profile backup, a credential migrator, or an unattended cloning tool.
+On Windows, Replica records the parts of an environment that can be safely reconstructed, compares a Snapshot with the current computer, and turns approved differences into a typed restore plan. On macOS, the Preview records application bundles, Homebrew inventory, non-sensitive environment/PATH data, and font metadata in a validated `.replica` file. It is not a disk image, a full-profile backup, a credential migrator, or an unattended cloning tool.
 
 > [!IMPORTANT]
 > Replica is currently pre-release software. Review the [current limitations](#current-limitations) before using it with important data, and test recovery on non-critical data first.
@@ -57,6 +57,7 @@ The current source implements:
 - rollback journals for Replica-owned file, environment, PATH, registry, and explicitly supported plugin changes;
 - post-reset recovery, Snapshot history and comparison, portable export, and GitHub Releases update checks;
 - Korean-default WPF UI with English resources, Light/Dark themes, keyboard navigation, high-contrast support, and asynchronous long-running commands.
+- macOS 13+ Avalonia Preview for Apple Silicon and Intel Macs, with read-only application-bundle/Homebrew/environment/PATH/font scanning, Lightweight Snapshot creation and validation, and GitHub Release update lookup.
 
 Automated tests use fakes and temporary data. They do not install software or change the real registry, environment, PATH, fonts, or user files.
 
@@ -79,19 +80,25 @@ See the [security model](docs/SECURITY.md), [threat model](docs/THREAT_MODEL.md)
 
 ## Installation and GitHub Releases
 
-[GitHub Releases](https://github.com/HechoLP/Replica/releases) is the only official distribution channel. When a release is available, a normal user needs to download only the latest Asset named **`ReplicaSetup.exe`**.
+[GitHub Releases](https://github.com/HechoLP/Replica/releases) is the only official distribution channel. Download only the one installer that matches the computer:
 
-- The automatically generated **Source code (zip)** and **Source code (tar.gz)** files are not Windows installers.
+| Computer | Download |
+| --- | --- |
+| Windows 11 x64 | **`ReplicaSetup.exe`** |
+| Apple Silicon Mac (M1 or later) | **`Replica-macOS-arm64.dmg`** |
+| Intel Mac | **`Replica-macOS-x64.dmg`** |
+
+- The automatically generated **Source code (zip)** and **Source code (tar.gz)** files are not installers.
 - **Stable** Releases are recommended for normal use.
 - **Alpha** and **Beta** Releases are test versions and may contain incomplete or changing behavior.
-- Until production code signing is configured, the installer is clearly marked **Unsigned**. Verify the published `ReplicaSetup.exe.sha256` before running it.
+- Until production signing is configured, the Windows installer is clearly marked **Unsigned** and macOS apps are ad-hoc signed but **not notarized**. Verify the matching `.sha256` file before opening a download.
 - If the Releases page contains no published release, there is no official installer to download yet. Do not download executables offered through issues, pull requests, or third-party mirrors.
 
-The installer is self-contained for Windows 11 `win-x64`; users do not separately install the .NET runtime. Installation behavior is documented in [Windows installer](docs/WINDOWS_INSTALLER.md).
+All installers are self-contained; users do not separately install the .NET runtime. Windows installation is documented in [Windows installer](docs/WINDOWS_INSTALLER.md), and Mac installation and Preview boundaries are documented in [macOS support](docs/MACOS.md).
 
 ## Current limitations
 
-- Windows 11 on `win-x64` is the only supported client target.
+- Windows 11 x64 has the full migration and recovery workflow. macOS 13+ supports Apple Silicon and Intel as a read-only Preview; Recovery Snapshot creation, password entry for encrypted Snapshot opening, restore execution, rollback, and app self-update installation are not yet available in the Mac UI.
 - No Stable Release or production code-signing certificate has been established yet.
 - Hardware drivers, credentials, authentication sessions, paid licenses, private keys, browser profiles, entire WSL disks, containers, volumes, and full application directories are outside automatic recovery.
 - Low-confidence package matches, unsupported versions, hardware-dependent settings, and unrecognized configuration remain manual.
@@ -105,7 +112,7 @@ The next release gates include broader clean-VM recovery and rollback checks, pr
 
 ## Development
 
-Prerequisites are Windows 11 and the .NET SDK selected by [global.json](global.json). From the repository root:
+Prerequisites are the .NET SDK selected by [global.json](global.json). Windows is required for WPF/Inno Setup packaging; macOS is required for final `.app`/DMG packaging. From the repository root:
 
 ```powershell
 dotnet restore Replica.sln
@@ -118,7 +125,13 @@ dotnet test Replica.sln -c Release --no-build
 Building an installer additionally requires Inno Setup 6:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.1.0-alpha.1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.2.0-alpha.1
+```
+
+On macOS, build either architecture with:
+
+```powershell
+pwsh ./scripts/build-macos-release.ps1 -Version 0.2.0-alpha.1 -Architecture arm64
 ```
 
 Do not run the opt-in installer smoke test outside a clean Windows test account or disposable VM. Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), and the [Git workflow](docs/GIT_WORKFLOW.md) before changing the repository.

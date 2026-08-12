@@ -10,7 +10,7 @@ Application, installer, manifest, and tag versions must agree. Release tags poin
 
 - Choose the intended channel and update product/release notes through a PR.
 - Confirm `main` is clean, protected, and fully synchronized.
-- Confirm formatting, Release build, unit/integration/security tests, and packaging checks pass on Windows.
+- Confirm formatting, Release build, unit/integration/security tests, and packaging checks pass on Windows and macOS.
 - Review dependency changes, third-party notices, installer contents, permissions, update endpoint, and rollback compatibility.
 - Confirm snapshot schema compatibility and document migrations or breaking changes.
 - Confirm no credentials, signing material, snapshots, user data, logs, databases, or local paths entered the source or artifacts.
@@ -18,7 +18,7 @@ Application, installer, manifest, and tag versions must agree. Release tags poin
 
 ## Automated release
 
-Create and push the approved annotated version tag. The tag workflow restores and tests from scratch, publishes self-contained `win-x64` output, creates `ReplicaSetup.exe` with Inno Setup, validates packaging, applies Authenticode when configured, calculates SHA-256, and prepares release notes.
+Create and push the approved annotated version tag. The tag workflow restores and tests from scratch. Windows publishes self-contained `win-x64` output and creates `ReplicaSetup.exe` with Inno Setup. macOS publishes self-contained `osx-arm64` and `osx-x64` Avalonia app bundles and creates architecture-specific DMGs. Every package is validated and receives SHA-256 material before release notes and Assets are published.
 
 Manual dispatch never creates a tag. It requires an existing annotated tag, checks out that exact ref, and applies the same validation and publication gates as a tag push.
 
@@ -29,8 +29,8 @@ Only after all jobs succeed does the workflow create the GitHub Release and uplo
 ## Verification after publication
 
 1. Download from the public release page, not the workflow workspace.
-2. Verify filename, size, published SHA-256, and Authenticode status.
-3. Test installation, launch, displayed version/channel, update-check behavior, and uninstall in a clean supported Windows VM.
+2. Verify filename, size, published SHA-256, Windows Authenticode status, and macOS signing/notarization status.
+3. Test Windows installation/uninstall in a clean supported VM and test both macOS bundles on representative Apple Silicon and Intel systems.
 4. Run a non-destructive scan and open a test snapshot.
 5. Confirm release notes and source/tag links.
 6. Record the result. If validation fails, remove or clearly mark the release unavailable, disclose impact, and issue a new version after correction; do not silently replace trusted bytes.

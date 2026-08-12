@@ -33,6 +33,7 @@ Assets include selected user files and settings, inventory privacy, snapshot enc
 | Restore interruption | inconsistent machine state | pre-mutation journal, dependency graph, atomic writes, verification, partial result and rollback |
 | Malicious/compromised CI | backdoored release | least privilege, protected tags/environments, pinned actions, review, provenance and checksums |
 | Application misidentification | wrong software install/update | ordered stable identities, confidence threshold, user confirmation, no auto action for Low/Unknown |
+| Cross-platform action confusion | Windows restore action runs from a macOS Snapshot or client | manifest source-platform metadata, platform-specific DI registration, Mac Preview has no mutation handlers, unsupported actions remain informational |
 
 ## Abuse cases explicitly rejected
 
@@ -45,7 +46,7 @@ Assets include selected user files and settings, inventory privacy, snapshot enc
 
 ## Residual risk
 
-SHA-256 proves integrity against the declared snapshot manifest but does not prove the snapshot author's identity. Authenticated encryption protects stored contents but cannot protect a compromised endpoint while data is open. winget and vendor installers remain external trust dependencies. Some applications cannot be reproduced safely because their settings are undocumented or tied to hardware, accounts, licenses, or newer Windows versions.
+SHA-256 proves integrity against the declared snapshot manifest but does not prove the snapshot author's identity. Authenticated encryption protects stored contents but cannot protect a compromised endpoint while data is open. winget, Homebrew, and vendor installers remain external trust dependencies. The Mac Preview is ad-hoc signed and not notarized, so Gatekeeper and release-hash verification remain important. Some applications cannot be reproduced safely because their settings are undocumented or tied to hardware, accounts, licenses, or platform versions.
 
 Replica must communicate these limits and use `Unsupported` or `ManualActionRequired` rather than guessing.
 

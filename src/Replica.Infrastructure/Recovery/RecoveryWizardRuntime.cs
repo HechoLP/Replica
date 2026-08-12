@@ -193,15 +193,19 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             analysis.ManualActions);
     }
 
-    private Task<ReplicaSnapshotReadResult> ReadSnapshotAsync(
+    private async Task<ReplicaSnapshotReadResult> ReadSnapshotAsync(
         string snapshotPath,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        return _snapshotReader.ReadAsync(
+        ReplicaSnapshotReadResult snapshot = await _snapshotReader.ReadAsync(
             new ReplicaSnapshotReadRequest(snapshotPath, password),
             null,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        ReplicaPlatformCompatibilityPolicy.EnsureRestoreSupported(
+            snapshot.Manifest.SourcePlatform,
+            ReplicaPlatformFamily.Windows);
+        return snapshot;
     }
 
     private static IReadOnlyList<RecoveryPathMapping> BuildSuggestedMappings(

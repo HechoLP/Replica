@@ -4,7 +4,7 @@
 
 Replica separates observation from mutation and policy from mechanism. Scanning and diffing are read-only. A restore planner turns differences into typed actions. The executor accepts only a validated, user-approved plan. Each mutation is journaled before application and verified afterward.
 
-The user sees and installs one application. Internal class libraries may divide responsibilities, but they are shipped together in `ReplicaSetup.exe` and run under `Replica.exe`.
+The user sees and installs one application for the selected platform. Internal class libraries ship inside `ReplicaSetup.exe`/`Replica.exe` on Windows or `Replica.app` inside the matching macOS DMG. No separately installed helper or service is introduced.
 
 ## Planned solution boundaries
 
@@ -13,18 +13,23 @@ Replica.App                 WPF views, view models, navigation, dialogs, DI boot
 Replica.Core                Domain models, policies, matching, diffing, planning contracts
 Replica.Infrastructure      Windows scanners, storage, SQLite, process and restore adapters
 Replica.Plugins.BuiltIn     Allow-listed application and development-tool integrations
+Replica.Storage             Cross-platform hardened .replica reader and writer
+Replica.Mac                 Avalonia macOS Preview UI and DI bootstrap
+Replica.Mac.Infrastructure  Read-only macOS scanners, paths, Snapshot composition, updates
 
 Replica.Core.Tests
 Replica.Infrastructure.Tests
 Replica.IntegrationTests
+Replica.Mac.Tests
 ```
 
-Dependencies point inward: App and Infrastructure depend on Core abstractions; Core does not depend on WPF, SQLite, winget, the registry, or filesystem-specific implementations. Built-in plugins implement stable Core contracts and are registered by the App bootstrapper.
+Dependencies point inward: platform apps and infrastructure depend on Core abstractions; Core targets portable `net10.0` and does not depend on WPF, Avalonia, SQLite, winget, Homebrew, the registry, or filesystem-specific implementations. The hardened Snapshot storage project is also platform-neutral. Built-in Windows plugins implement stable Core contracts and are registered by the Windows App bootstrapper.
 
 ## Major subsystems
 
 - **Bootstrap and shell:** dependency injection, navigation, dialogs, localization, theme, global exception handling, version information, and Windows compatibility checks.
 - **WPF workspace:** a single unelevated Shell hosts dedicated Home, Scan, Snapshot Builder, Comparison, Diff, Restore Plan, Recovery, Execution, Result, History, Settings, About, and Update views. View models own state and commands; code-behind only initializes controls.
+- **macOS Preview workspace:** a single Avalonia Shell provides read-only scanning, Lightweight Snapshot creation/validation, Snapshot inspection, and Release lookup. It never registers or resolves Windows mutation handlers.
 - **Inventory:** coordinates Windows, application, winget, registry, MSIX, environment, font, and plugin scanners. Partial failures become warnings rather than hidden omissions.
 - **Snapshot storage:** writes and validates atomic ZIP-based `.replica` containers, manifests, checksums, optional encrypted payloads, and explicit exclusions.
 - **Portable export:** inspects user-selected removable, fixed, network, and synchronized destinations, copies through a sibling temporary extension, verifies source/destination SHA-256, and never overwrites a collision.
@@ -62,6 +67,8 @@ Application-owned data lives below `%LOCALAPPDATA%\Replica` with paths provided 
 - temporary files.
 
 User-selected snapshot destinations remain user-controlled. Database data indexes local history and state; the portable source of recovery truth is the validated snapshot plus the current scan. Temporary and rollback data have bounded retention policies and are never committed.
+
+On macOS, application-owned Preview data uses the platform `LocalApplicationData` location under `Replica`. The Mac Preview does not create rollback or recovery execution state because it performs no system mutations.
 
 ## Concurrency and resilience
 

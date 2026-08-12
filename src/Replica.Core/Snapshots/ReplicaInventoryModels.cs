@@ -4,7 +4,18 @@ public sealed record ReplicaMachineInfo(
     string MachineName,
     ReplicaWindowsInfo Windows,
     string Architecture,
-    string Locale);
+    string Locale,
+    ReplicaPlatformInfo? Platform = null);
+
+public sealed record ReplicaPlatformInfo(
+    ReplicaPlatformFamily Family,
+    string DisplayName,
+    string Version,
+    string Build,
+    string Architecture,
+    string Locale,
+    string TimeZone,
+    IReadOnlyList<string> Capabilities);
 
 public sealed record ReplicaWindowsInfo(
     string Edition,
@@ -28,7 +39,9 @@ public sealed record ReplicaApplication(
 public sealed record ReplicaPackageIdentity(
     string? WingetPackageId,
     string? MsixPackageFamilyName,
-    string? MsiProductCode);
+    string? MsiProductCode,
+    string? MacBundleIdentifier = null,
+    string? HomebrewPackageId = null);
 
 public sealed record ReplicaEnvironmentVariable(
     string Name,

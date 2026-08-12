@@ -10,6 +10,8 @@ Replica collects inventory metadata and supported settings only for declared rec
 
 The following are excluded by default and by supported scanners: passwords, cookies, sessions, Credential Manager data, service or OAuth tokens, API keys, `.env` files, SSH private keys, BitLocker keys, stream keys, payment information, certificates with private keys, cryptocurrency wallets, and recovery phrases. A filename or variable-name match is a warning signal, not the sole defense; supported plugins must also define exact allow-lists and redaction behavior.
 
+On macOS, Keychain data, broad `~/Library` capture, browser profiles, login state, and user files are outside the Preview scanner. Environment values whose names indicate tokens, secrets, passwords, keys, credentials, or connection strings are discarded before Snapshot construction and appear only as reason-coded exclusions.
+
 Logs use structured event IDs, reason codes, sizes, hashes where appropriate, and redacted paths. They do not contain secret values, file contents, command-line secrets, encryption passwords, or access tokens. Diagnostics are opt-in for sharing.
 
 ## Snapshot protection
@@ -45,7 +47,7 @@ Application installation is not automatically reversed by uninstalling it. The j
 
 ## Release and update security
 
-Official downloads come from repository releases, use HTTPS, and are matched by expected owner/repository and asset name. Replica verifies SHA-256 and shows Authenticode status. Until code signing exists, the UI and release notes label the installer Unsigned.
+Official downloads come from repository releases, use HTTPS, and are matched by expected owner/repository and asset name. Replica verifies SHA-256 and shows platform signing status. Until production signing exists, the Windows installer is labeled Unsigned and macOS packages are labeled ad-hoc signed and not notarized.
 
 The optional before-reset installer copy accepts only `ReplicaSetup.exe` from published `HechoLP/Replica` GitHub Releases after explicit approval. It is stored beside recovery material rather than inside a Snapshot, streams to a temporary name with bounded declared size, verifies GitHub's SHA-256 digest when present, and is never launched automatically. A missing release digest is shown as unavailable rather than treated as verification.
 

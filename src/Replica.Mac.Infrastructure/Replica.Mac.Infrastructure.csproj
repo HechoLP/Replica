@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Replica.Core\Replica.Core.csproj" />
+    <ProjectReference Include="..\Replica.Storage\Replica.Storage.csproj" />
+  </ItemGroup>
+
+</Project>

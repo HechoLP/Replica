@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Replica.Core\Replica.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Replica.Infrastructure\Snapshots\ReplicaSnapshotReader.cs" Link="Snapshots\ReplicaSnapshotReader.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\ReplicaSnapshotWriter.cs" Link="Snapshots\ReplicaSnapshotWriter.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\SnapshotCrypto.cs" Link="Snapshots\SnapshotCrypto.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\SnapshotEntryNames.cs" Link="Snapshots\SnapshotEntryNames.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\SnapshotHashing.cs" Link="Snapshots\SnapshotHashing.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\SnapshotJson.cs" Link="Snapshots\SnapshotJson.cs" />
+    <Compile Include="..\Replica.Infrastructure\Snapshots\SnapshotPathValidator.cs" Link="Snapshots\SnapshotPathValidator.cs" />
+  </ItemGroup>
+
+</Project>

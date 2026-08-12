@@ -51,6 +51,11 @@ public sealed partial class ReleaseAutomationContractTests
         Assert.Contains("build-release.ps1", workflow, StringComparison.Ordinal);
         Assert.Contains("ReplicaSetup-${{ steps.version.outputs.version }}.exe", workflow, StringComparison.Ordinal);
         Assert.Contains("ReplicaSetup.exe.sha256", workflow, StringComparison.Ordinal);
+        Assert.Contains("package-macos:", workflow, StringComparison.Ordinal);
+        Assert.Contains("runs-on: macos-latest", workflow, StringComparison.Ordinal);
+        Assert.Contains("build-macos-release.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("Replica-macOS-arm64.dmg", workflow, StringComparison.Ordinal);
+        Assert.Contains("Replica-macOS-x64.dmg", workflow, StringComparison.Ordinal);
         Assert.Contains("--generate-notes", workflow, StringComparison.Ordinal);
         Assert.Contains("--prerelease", workflow, StringComparison.Ordinal);
         Assert.Contains("attest-build-provenance@", workflow, StringComparison.Ordinal);
@@ -87,6 +92,7 @@ public sealed partial class ReleaseAutomationContractTests
     {
         string validator = File.ReadAllText(RepositoryFile("scripts", "validate-release-version.ps1"));
         string assets = File.ReadAllText(RepositoryFile("scripts", "prepare-release-assets.ps1"));
+        string macAssets = File.ReadAllText(RepositoryFile("scripts", "build-macos-release.ps1"));
 
         Assert.Contains("Directory.Build.props", validator, StringComparison.Ordinal);
         Assert.Contains("alpha|beta|rc", validator, StringComparison.Ordinal);
@@ -94,8 +100,12 @@ public sealed partial class ReleaseAutomationContractTests
         Assert.Contains("ReplicaSetup-$Version.exe", assets, StringComparison.Ordinal);
         Assert.Contains("ReplicaSetup.exe", assets, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", assets, StringComparison.Ordinal);
+        Assert.Contains("Replica-macOS-$Architecture.dmg", macAssets, StringComparison.Ordinal);
+        Assert.Contains("codesign --force --deep --sign '-'", macAssets, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", macAssets, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-Expression", validator, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Invoke-Expression", assets, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Invoke-Expression", macAssets, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

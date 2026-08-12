@@ -1,12 +1,23 @@
 # Changelog
 
-All notable changes to Replica will be documented in this file. The project follows semantic version tags for GitHub Releases, but it has not published a Release yet.
+All notable changes to Replica are documented in this file. The project follows semantic version tags for GitHub Releases.
 
 ## [Unreleased]
 
-Release preparation continues. No tag or GitHub Release has been created.
+### Added
 
-## [0.1.0-alpha.1] - Unreleased
+- macOS 13+ Preview built with Avalonia for Apple Silicon and Intel Macs.
+- Read-only application bundle, Homebrew, environment/PATH, and font inventory on macOS.
+- macOS Lightweight Snapshot creation and hardened cross-platform Snapshot validation.
+- Self-contained `.app`/DMG packaging, architecture-specific SHA-256 files, and multi-platform GitHub Release automation.
+
+### Security
+
+- Mac snapshots remove sensitive environment values and exclude Keychain, broad Library data, browser profiles, and user files.
+- Windows restore handlers are not registered or executable in the Mac Preview.
+- macOS packages are plainly described as ad-hoc signed and not notarized.
+
+## [0.1.0-alpha.1] - 2026-08-12
 
 This is the first experimental Windows 11 `win-x64` Alpha candidate. It is not a disk image, credential migrator, full-profile backup, or unattended cloning tool.
 
@@ -30,7 +41,7 @@ This is the first experimental Windows 11 `win-x64` Alpha candidate. It is not a
 ### Known issues
 
 - The candidate is unsigned. Windows may display an unknown-publisher warning; verify the published SHA-256 before testing it.
-- Windows 11 `win-x64` is the only supported client target.
+- Windows 11 `win-x64` is the only supported client target in this release.
 - Low-confidence package matches, unsupported application versions, hardware-dependent settings, credentials, paid licenses, and unrecognized configuration remain manual actions.
 - Replica never automatically removes extra applications, downgrades software, reboots Windows, or uninstalls applications during rollback.
 - Hardware drivers, browser profiles, authentication sessions, private keys, containers, volumes, complete WSL disks, and broad application directories are not restored.
