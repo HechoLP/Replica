@@ -50,7 +50,7 @@ function Assert-BundleContract {
         throw 'The application bundle contract is incomplete.'
     }
 
-    & /usr/bin/test -x $bundleExecutable
+    & /bin/test -x $bundleExecutable
     if ($LASTEXITCODE -ne 0) {
         throw 'The bundled Replica executable is not executable.'
     }
