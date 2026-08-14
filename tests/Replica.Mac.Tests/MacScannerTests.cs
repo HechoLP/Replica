@@ -2,6 +2,7 @@ using Replica.Core.Platforms;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
 using Replica.Mac.Infrastructure.Scanning;
+using MacSensitiveEnvironmentPolicy = Replica.Mac.Infrastructure.Scanning.SensitiveEnvironmentPolicy;
 
 namespace Replica.Mac.Tests;
 
@@ -12,9 +13,24 @@ public sealed class MacScannerTests
     [InlineData("DATABASE_PASSWORD")]
     [InlineData("AWS_SECRET_ACCESS_KEY")]
     [InlineData("CONNECTION_STRING")]
+    [InlineData("DOCKER_AUTH_CONFIG")]
+    [InlineData("CI_JOB_JWT")]
+    [InlineData("NPM_CONFIG__AUTH")]
     public void SensitiveEnvironmentNamesAreRecognized(string name)
     {
-        Assert.True(SensitiveEnvironmentPolicy.IsSensitive(name));
+        Assert.True(MacSensitiveEnvironmentPolicy.IsSensitive(name));
+    }
+
+    [Theory]
+    [InlineData("LANG", true)]
+    [InlineData("LC_CTYPE", true)]
+    [InlineData("SHELL", true)]
+    [InlineData("DATABASE_URL", false)]
+    [InlineData("AWS_REGION", false)]
+    [InlineData("HOME", false)]
+    public void EnvironmentValuesRequireAnExplicitSafeName(string name, bool expected)
+    {
+        Assert.Equal(expected, MacSensitiveEnvironmentPolicy.CanCaptureValue(name));
     }
 
     [Fact]
@@ -32,8 +48,14 @@ public sealed class MacScannerTests
               <key>CFBundleName</key><string>Example</string>
               <key>CFBundleIdentifier</key><string>com.example.replica-test</string>
               <key>CFBundleShortVersionString</key><string>1.2.3</string>
+              <key>CFBundleExecutable</key><string>Example</string>
             </dict></plist>
             """);
+        string executableDirectory = Path.Combine(bundle, "MacOS");
+        Directory.CreateDirectory(executableDirectory);
+        await File.WriteAllBytesAsync(
+            Path.Combine(executableDirectory, "Example"),
+            [0xCF, 0xFA, 0xED, 0xFE, 0x07, 0x00, 0x00, 0x01]);
         MacApplicationSource source = new([temporary.Path]);
 
         IReadOnlyList<PlatformApplication> applications = await source.ReadAsync(CancellationToken.None);
@@ -42,7 +64,49 @@ public sealed class MacScannerTests
         Assert.Equal("Example", application.Name);
         Assert.Equal("1.2.3", application.Version);
         Assert.Equal("com.example.replica-test", application.BundleIdentifier);
+        Assert.Equal("x64", application.Architecture);
         Assert.False(application.IsRestorable);
+    }
+
+    [Fact]
+    public async Task NestedApplicationBundlesAreInventoriedWithoutDescendingIntoBundles()
+    {
+        using TemporaryDirectory temporary = new();
+        string contents = Path.Combine(temporary.Path, "Utilities", "Nested.app", "Contents");
+        Directory.CreateDirectory(contents);
+        await File.WriteAllTextAsync(
+            Path.Combine(contents, "Info.plist"),
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <plist version="1.0"><dict>
+              <key>CFBundleName</key><string>Nested</string>
+              <key>CFBundleIdentifier</key><string>com.example.nested</string>
+            </dict></plist>
+            """);
+        MacApplicationSource source = new([temporary.Path]);
+
+        PlatformApplication application = Assert.Single(
+            await source.ReadAsync(CancellationToken.None));
+
+        Assert.Equal("Nested", application.Name);
+        Assert.Equal("com.example.nested", application.BundleIdentifier);
+    }
+
+    [Fact]
+    public async Task BinaryPropertyListUsesTheBoundedTypedConverter()
+    {
+        using TemporaryDirectory temporary = new();
+        string path = Path.Combine(temporary.Path, "Info.plist");
+        await File.WriteAllBytesAsync(path, "bplist00fixture"u8.ToArray());
+        FakeBinaryPropertyListConverter converter = new();
+        MacPropertyListReader reader = new(converter);
+
+        IReadOnlyDictionary<string, string> values = await reader.ReadStringDictionaryAsync(
+            path,
+            CancellationToken.None);
+
+        Assert.Equal("Binary Example", values["CFBundleName"]);
+        Assert.Equal(Path.GetFullPath(path), converter.ReceivedPath);
     }
 
     [Fact]
@@ -114,6 +178,24 @@ public sealed class MacScannerTests
         {
             IReadOnlyList<PlatformFont> fonts = [new PlatformFont("Inter", "Regular", "User", "/tmp/Inter.ttf")];
             return Task.FromResult(fonts);
+        }
+    }
+
+    private sealed class FakeBinaryPropertyListConverter : IMacBinaryPropertyListConverter
+    {
+        public string? ReceivedPath { get; private set; }
+
+        public Task<byte[]> ConvertToXmlAsync(string path, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReceivedPath = path;
+            return Task.FromResult(
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <plist version="1.0"><dict>
+                  <key>CFBundleName</key><string>Binary Example</string>
+                </dict></plist>
+                """u8.ToArray());
         }
     }
 }

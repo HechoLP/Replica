@@ -32,6 +32,7 @@ public sealed class MainViewModel : ObservableObject
     private int homebrewCount;
     private int sensitiveCount;
     private int warningCount;
+    private string warningSummary = string.Empty;
 
     public MainViewModel(
         IPlatformEnvironmentScanner scanner,
@@ -128,6 +129,12 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref warningCount, value);
     }
 
+    public string WarningSummary
+    {
+        get => warningSummary;
+        private set => SetProperty(ref warningSummary, value);
+    }
+
     public bool HasReleasePage => releasePage is not null;
 
     private bool CanStartOperation() => !IsBusy;
@@ -151,8 +158,13 @@ public sealed class MainViewModel : ObservableObject
             HomebrewCount = result.Summary.HomebrewPackageCount;
             SensitiveCount = result.Summary.SensitiveExclusionCount;
             WarningCount = result.Summary.WarningCount;
+            WarningSummary = string.Join(
+                Environment.NewLine,
+                result.Warnings.Select(warning => $"• {warning.Provider}: {warning.Message}"));
             SnapshotDetails = $"{result.Platform.DisplayName} {result.Platform.Version} · {result.Platform.Architecture} · 글꼴 {result.Summary.FontCount}개";
-            Status = "스캔이 완료되었습니다. Lightweight Snapshot을 만들 수 있습니다.";
+            Status = result.Warnings.Count == 0
+                ? "스캔이 완료되었습니다. Lightweight Snapshot을 만들 수 있습니다."
+                : "스캔이 완료됐지만 일부 항목을 읽지 못했습니다. 경고를 확인한 뒤 Snapshot을 만드세요.";
             ProgressValue = 100;
         });
     }
@@ -208,7 +220,13 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        await RunOperationAsync(async cancellationToken =>
+        await OpenSnapshotPathAsync(path);
+    }
+
+    public Task OpenSnapshotPathAsync(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return RunOperationAsync(async cancellationToken =>
         {
             Status = "Snapshot 구조와 SHA-256을 검증하는 중입니다.";
             IsIndeterminate = true;
@@ -227,7 +245,10 @@ public sealed class MainViewModel : ObservableObject
         {
             Status = "GitHub Releases에서 업데이트를 확인하는 중입니다.";
             IsIndeterminate = true;
-            MacUpdateInfo update = await updateService.CheckAsync(currentVersion, UpdateChannel.Alpha, cancellationToken);
+            MacUpdateInfo update = await updateService.CheckAsync(
+                currentVersion,
+                UpdatePreference.Default.Channel,
+                cancellationToken);
             releasePage = update.ReleasePage;
             OnPropertyChanged(nameof(HasReleasePage));
             OpenReleasePageCommand.NotifyCanExecuteChanged();
@@ -279,6 +300,10 @@ public sealed class MainViewModel : ObservableObject
                 JsonException)
         {
             Status = "작업을 완료하지 못했습니다. 파일, 네트워크 또는 Snapshot 상태를 확인하세요.";
+        }
+        catch (Exception)
+        {
+            Status = "예기치 않은 문제가 발생해 작업을 안전하게 중단했습니다.";
         }
         finally
         {

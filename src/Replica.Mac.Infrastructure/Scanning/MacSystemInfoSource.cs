@@ -8,8 +8,19 @@ namespace Replica.Mac.Infrastructure.Scanning;
 public sealed class MacSystemInfoSource : IMacSystemInfoSource
 {
     private const string SystemVersionPath = "/System/Library/CoreServices/SystemVersion.plist";
+    private readonly IMacPropertyListReader propertyListReader;
 
-    public Task<(ReplicaPlatformInfo Platform, string MachineName)> ReadAsync(
+    public MacSystemInfoSource()
+        : this(new MacPropertyListReader())
+    {
+    }
+
+    public MacSystemInfoSource(IMacPropertyListReader propertyListReader)
+    {
+        this.propertyListReader = propertyListReader;
+    }
+
+    public async Task<(ReplicaPlatformInfo Platform, string MachineName)> ReadAsync(
         CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsMacOS())
@@ -22,11 +33,12 @@ public sealed class MacSystemInfoSource : IMacSystemInfoSource
         try
         {
             values = File.Exists(SystemVersionPath)
-                ? MacPropertyListReader.ReadStringDictionary(SystemVersionPath)
+                ? await propertyListReader.ReadStringDictionaryAsync(SystemVersionPath, cancellationToken)
+                    .ConfigureAwait(false)
                 : new Dictionary<string, string>(StringComparer.Ordinal);
         }
         catch (Exception exception) when (
-            exception is IOException or UnauthorizedAccessException or XmlException)
+            exception is IOException or UnauthorizedAccessException or XmlException or TimeoutException)
         {
             values = new Dictionary<string, string>(StringComparer.Ordinal);
         }
@@ -45,6 +57,6 @@ public sealed class MacSystemInfoSource : IMacSystemInfoSource
             locale,
             timeZone,
             ["MacOS", "ApplicationBundles", "HomebrewInventory", "SnapshotV1"]);
-        return Task.FromResult((platform, Environment.MachineName));
+        return (platform, Environment.MachineName);
     }
 }

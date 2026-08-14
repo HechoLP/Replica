@@ -27,6 +27,8 @@ public sealed class MacUpdateService : IMacUpdateService
 {
     private static readonly Uri ReleasesEndpoint = new("https://api.github.com/repos/HechoLP/Replica/releases?per_page=20");
     private const int MaximumResponseBytes = 2 * 1024 * 1024;
+    private const int MaximumAssetsPerRelease = 100;
+    private const long MaximumAssetSize = 1024L * 1024 * 1024;
     private readonly HttpClient client;
 
     public MacUpdateService(HttpClient client)
@@ -66,34 +68,54 @@ public sealed class MacUpdateService : IMacUpdateService
         using MemoryStream bounded = new();
         await CopyBoundedAsync(stream, bounded, MaximumResponseBytes, cancellationToken).ConfigureAwait(false);
         bounded.Position = 0;
-        using JsonDocument document = await JsonDocument.ParseAsync(
-            bounded,
-            new JsonDocumentOptions { MaxDepth = 32 },
-            cancellationToken).ConfigureAwait(false);
-
-        ReleaseCandidate? latest = document.RootElement.EnumerateArray()
-            .Select(ParseRelease)
-            .Where(candidate => candidate is not null && IsAllowed(candidate.Version, channel))
-            .Select(candidate => candidate!)
-            .OrderByDescending(candidate => candidate.Version)
-            .FirstOrDefault();
-        if (latest is null || latest.Version.CompareTo(current) <= 0)
+        JsonDocument document;
+        try
         {
-            return new MacUpdateInfo(false, currentVersion, latest?.Tag, latest?.Name, latest?.Page, null, null, "사용 가능한 새 버전이 없습니다.");
+            document = await JsonDocument.ParseAsync(
+                bounded,
+                new JsonDocumentOptions { MaxDepth = 32 },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return InvalidResponse(currentVersion);
         }
 
-        string architecture = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64";
-        string expectedAsset = $"Replica-macOS-{architecture}.dmg";
-        ReleaseAsset? asset = latest.Assets.FirstOrDefault(item => item.Name.Equals(expectedAsset, StringComparison.Ordinal));
-        return new MacUpdateInfo(
-            true,
-            currentVersion,
-            latest.Tag,
-            latest.Name,
-            latest.Page,
-            asset?.DownloadUrl,
-            asset?.Size,
-            asset is null ? "새 버전이 있지만 이 Mac용 설치 파일이 없습니다." : "Replica 새 버전이 있습니다.");
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return InvalidResponse(currentVersion);
+            }
+
+            ReleaseCandidate? latest = document.RootElement.EnumerateArray()
+                .Take(20)
+                .Select(ParseRelease)
+                .Where(candidate => candidate is not null && IsAllowed(candidate.Version, channel))
+                .Select(candidate => candidate!)
+                .OrderByDescending(candidate => candidate.Version)
+                .FirstOrDefault();
+            if (latest is null || latest.Version.CompareTo(current) <= 0)
+            {
+                return new MacUpdateInfo(false, currentVersion, latest?.Tag, latest?.Name, latest?.Page, null, null, "사용 가능한 새 버전이 없습니다.");
+            }
+
+            string architecture = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64";
+            string expectedAsset = $"Replica-macOS-{architecture}.dmg";
+            ReleaseAsset[] matches = latest.Assets
+                .Where(item => item.Name.Equals(expectedAsset, StringComparison.Ordinal))
+                .ToArray();
+            ReleaseAsset? asset = matches.Length == 1 ? matches[0] : null;
+            return new MacUpdateInfo(
+                true,
+                currentVersion,
+                latest.Tag,
+                latest.Name,
+                latest.Page,
+                asset?.DownloadUrl,
+                asset?.Size,
+                asset is null ? "새 버전이 있지만 이 Mac용 설치 파일이 없습니다." : "Replica 새 버전이 있습니다.");
+        }
     }
 
     private static ReleaseCandidate? ParseRelease(JsonElement release)
@@ -102,6 +124,8 @@ public sealed class MacUpdateService : IMacUpdateService
             !release.TryGetProperty("draft", out JsonElement draftElement) ||
             draftElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             draftElement.GetBoolean() ||
+            !release.TryGetProperty("prerelease", out JsonElement prereleaseElement) ||
+            prereleaseElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             !release.TryGetProperty("tag_name", out JsonElement tagElement) ||
             tagElement.ValueKind != JsonValueKind.String ||
             !release.TryGetProperty("html_url", out JsonElement pageElement) ||
@@ -113,15 +137,22 @@ public sealed class MacUpdateService : IMacUpdateService
         }
 
         string? tag = tagElement.GetString();
-        if (!SemanticVersion.TryParse(tag, out SemanticVersion? version) || version is null)
+        if (tag is null ||
+            !SemanticVersion.TryParse(tag, out SemanticVersion? version) ||
+            version is null ||
+            prereleaseElement.GetBoolean() != version.IsPrerelease)
         {
             return null;
         }
 
-        Uri? page = Uri.TryCreate(pageElement.GetString(), UriKind.Absolute, out Uri? parsedPage) &&
-            parsedPage.Scheme == Uri.UriSchemeHttps && parsedPage.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+        Uri? page = TryGetOfficialReleasePage(pageElement.GetString(), tag, out Uri? parsedPage)
             ? parsedPage
             : null;
+        if (page is null || assetsElement.GetArrayLength() > MaximumAssetsPerRelease)
+        {
+            return null;
+        }
+
         List<ReleaseAsset> assets = [];
         foreach (JsonElement item in assetsElement.EnumerateArray())
         {
@@ -139,12 +170,10 @@ public sealed class MacUpdateService : IMacUpdateService
             string? name = nameElement.GetString();
             string? url = urlElement.GetString();
             if (!string.IsNullOrWhiteSpace(name) &&
-                size >= 0 &&
-                Uri.TryCreate(url, UriKind.Absolute, out Uri? downloadUrl) &&
-                downloadUrl.Scheme == Uri.UriSchemeHttps &&
-                downloadUrl.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+                size is > 0 and <= MaximumAssetSize &&
+                TryGetOfficialAssetUrl(url, tag, name, out Uri? downloadUrl))
             {
-                assets.Add(new ReleaseAsset(name, downloadUrl, size));
+                assets.Add(new ReleaseAsset(name, downloadUrl!, size));
             }
         }
 
@@ -156,6 +185,55 @@ public sealed class MacUpdateService : IMacUpdateService
                 : tag!,
             page,
             assets);
+    }
+
+    private static MacUpdateInfo InvalidResponse(string currentVersion)
+    {
+        return new MacUpdateInfo(
+            false,
+            currentVersion,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "GitHub Releases 응답을 확인할 수 없습니다.");
+    }
+
+    private static bool TryGetOfficialReleasePage(string? value, string tag, out Uri? page)
+    {
+        page = null;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? parsed) ||
+            parsed.Scheme != Uri.UriSchemeHttps ||
+            !parsed.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+            !parsed.IsDefaultPort ||
+            !parsed.AbsolutePath.Equals($"/HechoLP/Replica/releases/tag/{tag}", StringComparison.Ordinal) ||
+            parsed.Query.Length != 0 ||
+            parsed.Fragment.Length != 0)
+        {
+            return false;
+        }
+
+        page = parsed;
+        return true;
+    }
+
+    private static bool TryGetOfficialAssetUrl(string? value, string tag, string name, out Uri? assetUrl)
+    {
+        assetUrl = null;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? parsed) ||
+            parsed.Scheme != Uri.UriSchemeHttps ||
+            !parsed.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+            !parsed.IsDefaultPort ||
+            !parsed.AbsolutePath.Equals($"/HechoLP/Replica/releases/download/{tag}/{name}", StringComparison.Ordinal) ||
+            parsed.Query.Length != 0 ||
+            parsed.Fragment.Length != 0)
+        {
+            return false;
+        }
+
+        assetUrl = parsed;
+        return true;
     }
 
     private static bool IsAllowed(SemanticVersion version, UpdateChannel channel)
