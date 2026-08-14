@@ -75,6 +75,29 @@ public sealed class RestorePlannerTests
     }
 
     [Fact]
+    public void CreatePlan_ConvertsActionWithoutRegisteredHandlerToManualReview()
+    {
+        EnvironmentDiffResult diff = Diff(
+            DiffRestoreMode.Recommended,
+            Item(DiffType.FileChanged, DiffArea.ConfigurationFiles, "settings.json", automatic: true));
+        HashSet<RestoreActionType> supported =
+        [
+            RestoreActionType.InstallPackage,
+            RestoreActionType.SetUserEnvironmentVariable,
+        ];
+
+        RestorePlan plan = _planner.CreatePlan(
+            diff,
+            new RestorePlanningOptions([], supported));
+
+        RestoreAction action = Assert.Single(plan.Actions);
+        Assert.Equal(RestoreActionType.ManualInstruction, action.Type);
+        Assert.True(action.IsManualOnly);
+        Assert.False(action.IsSelected);
+        Assert.Contains("no allow-listed execution handler", action.Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CreatePlan_RecommendedSelectsCompatibleUpdatesSettingsAndEnvironment()
     {
         EnvironmentDiffResult diff = Diff(

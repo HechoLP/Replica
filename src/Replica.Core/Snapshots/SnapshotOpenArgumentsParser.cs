@@ -11,18 +11,39 @@ public static class SnapshotOpenArgumentsParser
 
         if (arguments.Count != 2 ||
             !arguments[0].Equals(OpenSwitch, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(arguments[1]) ||
-            arguments[1].Length > 32_767 ||
-            arguments[1].Any(char.IsControl) ||
-            !Path.IsPathFullyQualified(arguments[1]) ||
-            !Path.GetExtension(arguments[1]).Equals(".replica", StringComparison.OrdinalIgnoreCase))
+            !TryNormalizePath(arguments[1], out snapshotPath))
+        {
+            snapshotPath = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryParseAssociatedFile(
+        IReadOnlyList<string> arguments,
+        out string? snapshotPath)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        snapshotPath = null;
+        return arguments.Count == 1 && TryNormalizePath(arguments[0], out snapshotPath);
+    }
+
+    private static bool TryNormalizePath(string path, out string? snapshotPath)
+    {
+        snapshotPath = null;
+        if (string.IsNullOrWhiteSpace(path) ||
+            path.Length > 32_767 ||
+            path.Any(char.IsControl) ||
+            !Path.IsPathFullyQualified(path) ||
+            !Path.GetExtension(path).Equals(".replica", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         try
         {
-            snapshotPath = Path.GetFullPath(arguments[1]);
+            snapshotPath = Path.GetFullPath(path);
             return true;
         }
         catch (Exception exception) when (

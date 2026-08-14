@@ -83,9 +83,12 @@ public sealed class EnvironmentRestoreActionHandler : IRestoreActionHandler
             path && action.RequiresAdministrator
             ? EnvironmentVariableScope.Machine
             : EnvironmentVariableScope.User;
+        string name = path
+            ? "PATH"
+            : RestoreActionKeyParser.GetEnvironmentVariableName(action, scope);
         EnvironmentWriteResult result = await _writer.WriteAsync(
             new EnvironmentWriteRequest(
-                path ? "PATH" : action.SourceDiffKey,
+                name,
                 action.TargetValue,
                 scope,
                 path,

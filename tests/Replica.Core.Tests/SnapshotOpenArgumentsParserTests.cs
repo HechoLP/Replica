@@ -41,4 +41,28 @@ public sealed class SnapshotOpenArgumentsParserTests
         Assert.False(parsed);
         Assert.Null(snapshotPath);
     }
+
+    [Fact]
+    public void TryParseAssociatedFileAcceptsOneAbsoluteReplicaPath()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "finder.replica");
+
+        bool parsed = SnapshotOpenArgumentsParser.TryParseAssociatedFile([path], out string? snapshotPath);
+
+        Assert.True(parsed);
+        Assert.Equal(Path.GetFullPath(path), snapshotPath);
+    }
+
+    [Fact]
+    public void TryParseAssociatedFileRejectsExtraOrRelativeArguments()
+    {
+        Assert.False(SnapshotOpenArgumentsParser.TryParseAssociatedFile(
+            ["relative.replica"],
+            out string? relativePath));
+        Assert.False(SnapshotOpenArgumentsParser.TryParseAssociatedFile(
+            ["C:\\one.replica", "C:\\two.replica"],
+            out string? multiplePath));
+        Assert.Null(relativePath);
+        Assert.Null(multiplePath);
+    }
 }

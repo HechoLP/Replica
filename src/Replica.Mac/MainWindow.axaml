@@ -84,7 +84,7 @@
                 <TextBlock Text="{Binding HomebrewCount}" FontSize="26" FontWeight="Bold" />
               </StackPanel>
               <StackPanel Grid.Column="2">
-                <TextBlock Text="민감 제외" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="환경 값 제외" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 <TextBlock Text="{Binding SensitiveCount}" FontSize="26" FontWeight="Bold" />
               </StackPanel>
               <StackPanel Grid.Column="3">
@@ -98,8 +98,10 @@
         <Border Classes="card">
           <StackPanel Spacing="8">
             <TextBlock Text="상태" FontSize="16" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-            <TextBlock Text="{Binding SnapshotDetails}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+             <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+             <TextBlock Text="{Binding WarningSummary}" TextWrapping="Wrap" Foreground="#C94F45"
+                        AutomationProperties.Name="스캔 경고 상세" />
+             <TextBlock Text="{Binding SnapshotDetails}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             <Button Content="Release 페이지 열기" Command="{Binding OpenReleasePageCommand}" IsVisible="{Binding HasReleasePage}"
                     HorizontalAlignment="Left" />
           </StackPanel>

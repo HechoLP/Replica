@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Replica.Core.Services;
+using Replica.Core.Snapshots;
 using Replica.Infrastructure.Snapshots;
 using Replica.Mac.Infrastructure.Paths;
 using Replica.Mac.Infrastructure.Scanning;
@@ -16,6 +18,7 @@ namespace Replica.Mac;
 public sealed partial class App : Application
 {
     private ServiceProvider? services;
+    private string? lastActivatedSnapshotPath;
 
     public override void Initialize()
     {
@@ -29,15 +32,76 @@ public sealed partial class App : Application
             ServiceCollection registrations = new();
             ConfigureServices(registrations);
             services = registrations.BuildServiceProvider(validateScopes: true);
+            MainViewModel viewModel = services.GetRequiredService<MainViewModel>();
             MainWindow window = new()
             {
-                DataContext = services.GetRequiredService<MainViewModel>(),
+                DataContext = viewModel,
             };
             services.GetRequiredService<MacFileDialogService>().Attach(window);
             desktop.MainWindow = window;
+            desktop.Exit += (_, _) => services?.Dispose();
+            if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
+            {
+                activatableLifetime.Activated += (_, eventArgs) =>
+                {
+                    if (eventArgs is FileActivatedEventArgs fileArguments)
+                    {
+                        TryOpenActivatedSnapshot(fileArguments.Files, viewModel);
+                    }
+                };
+            }
+
+            TryOpenActivatedSnapshot(desktop.Args, viewModel);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void TryOpenActivatedSnapshot(
+        IReadOnlyList<IStorageItem> files,
+        MainViewModel viewModel)
+    {
+        if (files.Count != 1 || !files[0].Path.IsFile)
+        {
+            return;
+        }
+
+        TryOpenActivatedSnapshot([files[0].Path.LocalPath], viewModel);
+    }
+
+    private void TryOpenActivatedSnapshot(IReadOnlyList<string>? arguments, MainViewModel viewModel)
+    {
+        if (arguments is null)
+        {
+            return;
+        }
+
+        bool parsed = SnapshotOpenArgumentsParser.TryParse(arguments, out string? snapshotPath) ||
+            SnapshotOpenArgumentsParser.TryParseAssociatedFile(arguments, out snapshotPath);
+        if (!parsed || snapshotPath is null ||
+            snapshotPath.Equals(lastActivatedSnapshotPath, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        lastActivatedSnapshotPath = snapshotPath;
+        Task operation = viewModel.OpenSnapshotPathAsync(snapshotPath);
+        _ = ClearActivatedSnapshotWhenCompleteAsync(operation, snapshotPath);
+    }
+
+    private async Task ClearActivatedSnapshotWhenCompleteAsync(Task operation, string snapshotPath)
+    {
+        try
+        {
+            await operation;
+        }
+        finally
+        {
+            if (snapshotPath.Equals(lastActivatedSnapshotPath, StringComparison.Ordinal))
+            {
+                lastActivatedSnapshotPath = null;
+            }
+        }
     }
 
     private static void ConfigureServices(IServiceCollection services)

@@ -275,10 +275,24 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
 
     private static void ValidateManifest(ReplicaSnapshotManifest manifest)
     {
-        if (!string.Equals(
-                manifest.SchemaVersion,
-                ReplicaSnapshotManifest.CurrentSchemaVersion,
-                StringComparison.Ordinal) ||
+        bool isCurrentSchema = string.Equals(
+            manifest.SchemaVersion,
+            ReplicaSnapshotManifest.CurrentSchemaVersion,
+            StringComparison.Ordinal);
+        bool isLegacySchema = string.Equals(
+            manifest.SchemaVersion,
+            ReplicaSnapshotManifest.LegacySchemaVersion,
+            StringComparison.Ordinal);
+        bool platformMetadataMatches = PlatformMetadataMatches(manifest);
+        bool isSupportedLegacyWindows = isLegacySchema &&
+            manifest.SourcePlatform == ReplicaPlatformFamily.Windows &&
+            (manifest.Metadata?.Machine?.Platform is null || platformMetadataMatches);
+        bool isSupportedLegacyMac = isLegacySchema &&
+            manifest.SourcePlatform == ReplicaPlatformFamily.MacOS &&
+            platformMetadataMatches;
+
+        if ((!isCurrentSchema && !isSupportedLegacyWindows && !isSupportedLegacyMac) ||
+            isCurrentSchema && !platformMetadataMatches ||
             manifest.SnapshotId == Guid.Empty ||
             !Enum.IsDefined(manifest.SnapshotType) ||
             !Enum.IsDefined(manifest.SourcePlatform) ||
@@ -319,13 +333,29 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
             !string.Equals(
                 manifest.Locale,
                 manifest.Metadata.Machine.Locale,
-                StringComparison.Ordinal) ||
-            manifest.SourcePlatform != ReplicaPlatformFamily.Windows &&
-            (manifest.Metadata.Machine.Platform is null ||
-             manifest.Metadata.Machine.Platform.Family != manifest.SourcePlatform))
+                StringComparison.Ordinal))
         {
             throw new ReplicaSnapshotException("The snapshot manifest is invalid or unsupported.");
         }
+    }
+
+    private static bool PlatformMetadataMatches(ReplicaSnapshotManifest manifest)
+    {
+        ReplicaMachineInfo? machine = manifest.Metadata?.Machine;
+        ReplicaPlatformInfo? platform = machine?.Platform;
+        ReplicaWindowsInfo? windows = machine?.Windows;
+        return platform is not null && windows is not null &&
+            platform.Family == manifest.SourcePlatform &&
+            string.Equals(platform.DisplayName, windows.Edition, StringComparison.Ordinal) &&
+            string.Equals(platform.Version, windows.Version, StringComparison.Ordinal) &&
+            string.Equals(platform.Build, windows.Build, StringComparison.Ordinal) &&
+            string.Equals(platform.Architecture, machine!.Architecture, StringComparison.Ordinal) &&
+            string.Equals(platform.Architecture, windows.Architecture, StringComparison.Ordinal) &&
+            string.Equals(platform.Locale, machine.Locale, StringComparison.Ordinal) &&
+            string.Equals(platform.Locale, windows.Locale, StringComparison.Ordinal) &&
+            string.Equals(platform.TimeZone, windows.TimeZone, StringComparison.Ordinal) &&
+            platform.Capabilities is not null && windows.Capabilities is not null &&
+            platform.Capabilities.SequenceEqual(windows.Capabilities, StringComparer.Ordinal);
     }
 
     private static IReadOnlyDictionary<string, ReplicaChecksum> ValidateChecksumIndex(
@@ -399,7 +429,9 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
                 application.Artifacts is null ||
                 string.IsNullOrWhiteSpace(application.DisplayName)) ||
             environment.Variables.Any(variable =>
-                variable is null || string.IsNullOrWhiteSpace(variable.Name)) ||
+                variable is null ||
+                string.IsNullOrWhiteSpace(variable.Name) ||
+                SensitiveEnvironmentPolicy.IsSensitiveName(variable.Name)) ||
             environment.PathEntries.Any(pathEntry => pathEntry is null || pathEntry.Order < 0) ||
             fonts.Any(font => font is null) ||
             plugins.Any(plugin =>

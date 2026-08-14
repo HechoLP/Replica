@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Replica.Core.Services;
@@ -317,8 +318,12 @@ public sealed class ReplicaSnapshotSecurityTests
         Assert.DoesNotContain("wrong password", exception.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task SensitiveEnvironmentVariableIsRejectedWithoutExposingItsValue()
+    [Theory]
+    [InlineData("SERVICE_TOKEN")]
+    [InlineData("SIGNING_KEY")]
+    [InlineData("DATABASE_CREDENTIAL")]
+    [InlineData("DOCKER_AUTH_CONFIG")]
+    public async Task SensitiveEnvironmentVariableIsRejectedWithoutExposingItsValue(string variableName)
     {
         using SnapshotTestContext context = new();
         string destination = Path.Combine(context.RootPath, "sensitive-environment.replica");
@@ -329,7 +334,7 @@ public sealed class ReplicaSnapshotSecurityTests
             {
                 Environment = request.Inventory.Environment with
                 {
-                    Variables = [new ReplicaEnvironmentVariable("SERVICE_TOKEN", "do-not-expose", "User")],
+                    Variables = [new ReplicaEnvironmentVariable(variableName, "do-not-expose", "User")],
                 },
             },
         };
@@ -338,6 +343,95 @@ public sealed class ReplicaSnapshotSecurityTests
             () => context.CreateWriter().WriteAsync(request, progress: null, CancellationToken.None));
 
         Assert.DoesNotContain("do-not-expose", exception.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(destination));
+    }
+
+    [Fact]
+    public async Task ReaderRejectsRewrittenSensitiveEnvironmentVariableWithValidChecksums()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "rewritten-sensitive.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        JsonObject environment = JsonNode.Parse(
+            ReadZipEntry(destination, "inventory/environment.json"))!.AsObject();
+        JsonObject variable = environment["variables"]!.AsArray()[0]!.AsObject();
+        variable["name"] = "SIGNING_KEY";
+        variable["value"] = "never-display";
+        byte[] rewritten = Encoding.UTF8.GetBytes(environment.ToJsonString());
+        ReplaceZipEntry(destination, "inventory/environment.json", rewritten);
+
+        JsonArray checksums = JsonNode.Parse(ReadZipEntry(destination, "checksums.json"))!.AsArray();
+        JsonObject checksum = checksums
+            .Select(node => node!.AsObject())
+            .Single(node => string.Equals(
+                node["entryPath"]!.GetValue<string>(),
+                "inventory/environment.json",
+                StringComparison.Ordinal));
+        checksum["value"] = Convert.ToHexString(SHA256.HashData(rewritten));
+        ReplaceZipEntry(destination, "checksums.json", Encoding.UTF8.GetBytes(checksums.ToJsonString()));
+
+        ReplicaSnapshotException exception = await Assert.ThrowsAsync<ReplicaSnapshotException>(() =>
+            context.CreateReader().ReadAsync(
+                new ReplicaSnapshotReadRequest(destination),
+                progress: null,
+                CancellationToken.None));
+
+        Assert.DoesNotContain("never-display", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CurrentSchemaRejectsConflictingPlatformMetadata()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "platform-conflict.replica");
+        await context.CreateWriter().WriteAsync(
+            context.CreateRequest(destination, SnapshotType.Lightweight),
+            progress: null,
+            CancellationToken.None);
+        JsonObject manifest = JsonNode.Parse(ReadZipEntry(destination, "manifest.json"))!.AsObject();
+        manifest["sourcePlatform"] = "MacOS";
+        ReplaceZipEntry(destination, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString()));
+
+        ReplicaSnapshotException exception = await Assert.ThrowsAsync<ReplicaSnapshotException>(() =>
+            context.CreateReader().ReadAsync(
+                new ReplicaSnapshotReadRequest(destination),
+                progress: null,
+                CancellationToken.None));
+
+        Assert.Contains("invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WriterRejectsInternallyInconsistentPlatformMetadata()
+    {
+        using SnapshotTestContext context = new();
+        string destination = Path.Combine(context.RootPath, "platform-input-conflict.replica");
+        ReplicaSnapshotWriteRequest request = context.CreateRequest(destination, SnapshotType.Lightweight);
+        ReplicaWindowsInfo windows = request.Machine.Windows;
+        request = request with
+        {
+            Machine = request.Machine with
+            {
+                Platform = new ReplicaPlatformInfo(
+                    ReplicaPlatformFamily.Windows,
+                    windows.Edition,
+                    windows.Version,
+                    windows.Build,
+                    "arm64",
+                    windows.Locale,
+                    windows.TimeZone,
+                    windows.Capabilities),
+            },
+        };
+
+        await Assert.ThrowsAsync<ReplicaSnapshotException>(() => context.CreateWriter().WriteAsync(
+            request,
+            progress: null,
+            CancellationToken.None));
+
         Assert.False(File.Exists(destination));
     }
 

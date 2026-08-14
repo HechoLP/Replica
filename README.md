@@ -78,6 +78,8 @@ It also does not implicitly sweep all of AppData, Windows, Program Files, Progra
 
 See the [security model](docs/SECURITY.md), [threat model](docs/THREAT_MODEL.md), and [security policy](SECURITY.md).
 
+The latest completed audit stages and remaining platform gaps are tracked in [Cross-platform quality status](docs/CROSS_PLATFORM_QUALITY.md).
+
 ## Installation and GitHub Releases
 
 [GitHub Releases](https://github.com/HechoLP/Replica/releases) is the only official distribution channel. Download only the one installer that matches the computer:

@@ -55,7 +55,12 @@ public sealed class MacLightweightSnapshotService : IMacLightweightSnapshotServi
             []);
         IReadOnlyList<ReplicaExclusion> exclusions = scan.EnvironmentVariables
             .Where(variable => variable.IsSensitive)
-            .Select(variable => new ReplicaExclusion(variable.Name, "SensitiveEnvironmentVariable", variable.ExclusionReason))
+            .Select(variable => new ReplicaExclusion(
+                variable.Name,
+                variable.ExclusionReason == "SensitiveName"
+                    ? "SensitiveEnvironmentVariable"
+                    : "EnvironmentValueNotApproved",
+                variable.ExclusionReason))
             .Concat(
             [
                 new ReplicaExclusion("~/Library", "BroadLocationExcluded"),
@@ -63,7 +68,22 @@ public sealed class MacLightweightSnapshotService : IMacLightweightSnapshotServi
                 new ReplicaExclusion("BrowserProfiles", "SensitiveProfileExcluded"),
                 new ReplicaExclusion("Keychain", "CredentialsExcluded"),
             ])
+            .Concat(scan.Warnings.Select(warning => new ReplicaExclusion(
+                $"provider:{warning.Provider}",
+                $"CaptureWarning:{warning.Code}",
+                "The provider did not return a complete inventory.")))
             .OrderBy(exclusion => exclusion.Path, StringComparer.Ordinal)
+            .ToArray();
+        HashSet<string> failedProviders = scan.Warnings
+            .Select(warning => warning.Provider)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<string> capturedCapabilities = scan.Platform.Capabilities
+            .Where(capability =>
+                !capability.Equals("ApplicationBundles", StringComparison.OrdinalIgnoreCase) ||
+                !failedProviders.Contains("ApplicationBundles"))
+            .Where(capability =>
+                !capability.Equals("HomebrewInventory", StringComparison.OrdinalIgnoreCase) ||
+                !failedProviders.Contains("Homebrew"))
             .ToArray();
         ReplicaMachineInfo machine = new(
             scan.MachineName,
@@ -77,7 +97,7 @@ public sealed class MacLightweightSnapshotService : IMacLightweightSnapshotServi
             productVersion,
             machine,
             inventory,
-            scan.Platform.Capabilities,
+            capturedCapabilities,
             exclusions,
             new ReplicaRecoveryOptions("RenameAndKeepBoth", 0, null, [], []));
         return writer.WriteAsync(request, progress, cancellationToken);

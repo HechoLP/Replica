@@ -16,7 +16,8 @@ public sealed record ReplicaSnapshotManifest(
     ReplicaSnapshotEncryptionInfo? Encryption = null,
     ReplicaPlatformFamily SourcePlatform = ReplicaPlatformFamily.Windows)
 {
-    public const string CurrentSchemaVersion = "1.0";
+    public const string LegacySchemaVersion = "1.0";
+    public const string CurrentSchemaVersion = "1.1";
 }
 
 public sealed record ReplicaSnapshotMetadata(

@@ -18,7 +18,8 @@ public sealed class GlobalExceptionHandlerTests
             () => handler.Handle(new InvalidOperationException("test"), "unit test"));
 
         Assert.Null(exception);
-        Assert.Contains("시스템 변경은 수행되지 않았습니다", dialog.Message, StringComparison.Ordinal);
+        Assert.Contains("추가 작업을 중단했습니다", dialog.Message, StringComparison.Ordinal);
+        Assert.Contains("Rollback Journal", dialog.Message, StringComparison.Ordinal);
     }
 
     [Fact]

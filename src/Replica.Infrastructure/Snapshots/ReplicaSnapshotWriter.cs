@@ -240,6 +240,8 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             string.IsNullOrWhiteSpace(request.Machine.Architecture) ||
             string.IsNullOrWhiteSpace(request.Machine.Locale) ||
             !WindowsInfoMatches(request.Inventory.Windows, request.Machine.Windows) ||
+            request.Machine.Platform is not null &&
+            !PlatformInfoMatches(request.Machine.Platform, request.Machine) ||
             !Enum.IsDefined(request.SnapshotType) ||
             request.Capabilities.Any(string.IsNullOrWhiteSpace) ||
             request.Exclusions.Any(exclusion =>
@@ -290,17 +292,27 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
                left.Capabilities.SequenceEqual(right.Capabilities, StringComparer.Ordinal);
     }
 
+    private static bool PlatformInfoMatches(
+        ReplicaPlatformInfo platform,
+        ReplicaMachineInfo machine)
+    {
+        ReplicaWindowsInfo windows = machine.Windows;
+        return Enum.IsDefined(platform.Family) &&
+            string.Equals(platform.DisplayName, windows.Edition, StringComparison.Ordinal) &&
+            string.Equals(platform.Version, windows.Version, StringComparison.Ordinal) &&
+            string.Equals(platform.Build, windows.Build, StringComparison.Ordinal) &&
+            string.Equals(platform.Architecture, machine.Architecture, StringComparison.Ordinal) &&
+            string.Equals(platform.Architecture, windows.Architecture, StringComparison.Ordinal) &&
+            string.Equals(platform.Locale, machine.Locale, StringComparison.Ordinal) &&
+            string.Equals(platform.Locale, windows.Locale, StringComparison.Ordinal) &&
+            string.Equals(platform.TimeZone, windows.TimeZone, StringComparison.Ordinal) &&
+            platform.Capabilities is not null &&
+            platform.Capabilities.SequenceEqual(windows.Capabilities, StringComparer.Ordinal);
+    }
+
     private static bool IsSensitiveVariableName(string name)
     {
-        string normalized = name.Replace('-', '_').ToUpperInvariant();
-        return normalized.Contains("PASSWORD", StringComparison.Ordinal) ||
-               normalized.Contains("PASSWD", StringComparison.Ordinal) ||
-               normalized.Contains("TOKEN", StringComparison.Ordinal) ||
-               normalized.Contains("SECRET", StringComparison.Ordinal) ||
-               normalized.Contains("API_KEY", StringComparison.Ordinal) ||
-               normalized.Contains("PRIVATE_KEY", StringComparison.Ordinal) ||
-               normalized.Contains("RECOVERY_KEY", StringComparison.Ordinal) ||
-               normalized.Contains("CONNECTION_STRING", StringComparison.Ordinal);
+        return SensitiveEnvironmentPolicy.IsSensitiveName(name);
     }
 
     private static void ValidateEstimate(
@@ -385,6 +397,16 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
         IReadOnlyList<ReplicaArtifact> artifacts,
         IReadOnlyList<ReplicaExclusion> exclusions)
     {
+        ReplicaPlatformInfo platform = request.Machine.Platform ?? new ReplicaPlatformInfo(
+            ReplicaPlatformFamily.Windows,
+            request.Machine.Windows.Edition,
+            request.Machine.Windows.Version,
+            request.Machine.Windows.Build,
+            request.Machine.Architecture,
+            request.Machine.Locale,
+            request.Machine.Windows.TimeZone,
+            request.Machine.Windows.Capabilities);
+        ReplicaMachineInfo machine = request.Machine with { Platform = platform };
         return new ReplicaSnapshotManifest(
             ReplicaSnapshotManifest.CurrentSchemaVersion,
             request.ProductVersion,
@@ -397,9 +419,9 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             request.Machine.Locale,
             request.Capabilities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             exclusions,
-            new ReplicaSnapshotMetadata(request.Machine, artifacts, request.Hardware),
+            new ReplicaSnapshotMetadata(machine, artifacts, request.Hardware),
             Encryption: null,
-            request.Machine.Platform?.Family ?? ReplicaPlatformFamily.Windows);
+            platform.Family);
     }
 
     private static async Task WriteRequiredMetadataAsync(

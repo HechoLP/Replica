@@ -10,7 +10,7 @@ public sealed class RecoveryDialogService : IRecoveryDialogService
     {
         OpenFileDialog dialog = new()
         {
-            Title = "Recovery Snapshot 선택",
+            Title = "Replica Snapshot 선택",
             Filter = "Replica Snapshot (*.replica)|*.replica",
             CheckFileExists = true,
             Multiselect = false,

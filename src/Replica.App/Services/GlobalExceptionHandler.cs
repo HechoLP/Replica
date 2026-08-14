@@ -26,6 +26,6 @@ public sealed class GlobalExceptionHandler : IGlobalExceptionHandler
             exception.GetType().FullName ?? exception.GetType().Name);
         _dialogService.ShowMessage(
             "Replica",
-            "예기치 않은 문제가 발생했습니다. 작업은 중단되었으며 시스템 변경은 수행되지 않았습니다.");
+            "예기치 않은 문제가 발생해 추가 작업을 중단했습니다. 실행 결과와 Rollback Journal을 확인하세요.");
     }
 }

@@ -25,11 +25,12 @@ public sealed class MacEnvironmentSource : IMacEnvironmentSource
 
             string value = entry.Value?.ToString() ?? string.Empty;
             bool sensitive = SensitiveEnvironmentPolicy.IsSensitive(name);
+            bool canCaptureValue = SensitiveEnvironmentPolicy.CanCaptureValue(name);
             variables.Add(new PlatformEnvironmentVariable(
                 name,
-                sensitive ? null : value,
-                sensitive,
-                sensitive ? "SensitiveName" : null));
+                canCaptureValue ? value : null,
+                !canCaptureValue,
+                sensitive ? "SensitiveName" : canCaptureValue ? null : "UnapprovedEnvironmentValue"));
             if (name.Equals("PATH", StringComparison.OrdinalIgnoreCase))
             {
                 pathValue = value;

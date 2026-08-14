@@ -43,6 +43,23 @@
                 <StackPanel>
                     <TextBlock FontWeight="SemiBold" Text="{Binding PlanSummary}" />
                     <TextBlock Margin="0,7,0,10" Foreground="{DynamicResource DangerBrush}" Text="복원 계획은 최종 승인 전 실행되지 않으며 Extra 제거·다운그레이드·자동 재부팅을 수행하지 않습니다." TextWrapping="Wrap" />
+                    <DataGrid Margin="0,0,0,12" MaxHeight="300" AutoGenerateColumns="False" CanUserAddRows="False"
+                              IsReadOnly="True" ItemsSource="{Binding PlanActions}" AutomationProperties.Name="Recovery Restore Plan 작업 상세">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Width="70" Header="선택" Binding="{Binding IsSelected}" />
+                            <DataGridTextColumn Width="180" Header="작업" Binding="{Binding Name}" />
+                            <DataGridTextColumn Width="130" Header="유형" Binding="{Binding Type}" />
+                            <DataGridTextColumn Width="150" Header="원본 값" Binding="{Binding OriginalValue}" />
+                            <DataGridTextColumn Width="150" Header="현재 값" Binding="{Binding CurrentValue}" />
+                            <DataGridTextColumn Width="150" Header="목표 값" Binding="{Binding TargetValue}" />
+                            <DataGridTextColumn Width="80" Header="위험도" Binding="{Binding Risk}" />
+                            <DataGridCheckBoxColumn Width="90" Header="관리자" Binding="{Binding RequiresAdministrator}" />
+                            <DataGridCheckBoxColumn Width="80" Header="재부팅" Binding="{Binding RequiresRestart}" />
+                            <DataGridCheckBoxColumn Width="80" Header="롤백" Binding="{Binding CanRollback}" />
+                            <DataGridCheckBoxColumn Width="80" Header="수동" Binding="{Binding IsManualOnly}" />
+                            <DataGridTextColumn Width="220" Header="설명" Binding="{Binding Description}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                     <WrapPanel>
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding AnalyzeCommand}" Content="현재 PC 검사·차이 분석" IsEnabled="{Binding CanAnalyze}" />
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ApprovePlanCommand}" Content="Restore Plan 최종 승인" IsEnabled="{Binding CanApprovePlan}" />

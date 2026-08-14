@@ -23,9 +23,22 @@ public sealed partial class RestoreDryRunViewModel : ObservableObject
 
     public IReadOnlyList<DiffRestoreMode> Modes { get; } = Enum.GetValues<DiffRestoreMode>();
 
+    public event Action<DiffRestoreMode>? ModeSelectionRequested;
+
     public bool CanReview => _pendingPlan?.ReviewStatus == RestorePlanReviewStatus.PendingReview;
 
     public RestorePlan? ReviewedPlan { get; private set; }
+
+    public void Invalidate(string statusText)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(statusText);
+        _pendingPlan = null;
+        ReviewedPlan = null;
+        Summary = [];
+        Actions = [];
+        StatusText = statusText;
+        OnPropertyChanged(nameof(CanReview));
+    }
 
     public void Display(RestorePlan plan)
     {
@@ -55,6 +68,7 @@ public sealed partial class RestoreDryRunViewModel : ObservableObject
             DiffRestoreMode.Recommended => "Recommended: 호환 가능한 업데이트와 설정·환경 병합을 제안합니다.",
             _ => "Exact: 가능한 차이를 모두 표시하지만 제거·다운그레이드·고위험 작업은 수동입니다.",
         };
+        ModeSelectionRequested?.Invoke(mode);
     }
 
     [RelayCommand]

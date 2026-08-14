@@ -36,6 +36,33 @@ public sealed class MacSnapshotTests
         Assert.Contains(read.Manifest.Exclusions, exclusion => exclusion.Path == "API_TOKEN");
     }
 
+    [Fact]
+    public async Task PartialProviderFailureIsRecordedAndCapabilityIsRemoved()
+    {
+        using TemporaryDirectory temporary = new();
+        string destination = Path.Combine(temporary.Path, "partial.replica");
+        ISnapshotReader reader = new ReplicaSnapshotReader();
+        ISnapshotWriter writer = new ReplicaSnapshotWriter(new EmptySnapshotSelectionEstimator(), reader);
+        MacLightweightSnapshotService service = new(writer);
+        PlatformScanResult scan = CreateScan() with
+        {
+            Warnings = [new PlatformScanWarning("Homebrew", "Timeout", "Homebrew inventory timed out.")],
+        };
+
+        ReplicaSnapshotManifest manifest = await service.CreateAsync(
+            destination,
+            "0.2.0-alpha.1",
+            scan,
+            progress: null,
+            CancellationToken.None);
+
+        Assert.DoesNotContain("HomebrewInventory", manifest.Capabilities);
+        Assert.Contains(
+            manifest.Exclusions,
+            exclusion => exclusion.Path == "provider:Homebrew" &&
+                exclusion.ReasonCode == "CaptureWarning:Timeout");
+    }
+
     private static PlatformScanResult CreateScan()
     {
         ReplicaPlatformInfo platform = new(

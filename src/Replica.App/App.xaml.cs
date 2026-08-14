@@ -61,7 +61,7 @@ public partial class App : Application
                     .OpenFromCommandLineAsync(snapshotPath!);
             }
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             if (elevatedRequest)
             {
@@ -70,7 +70,7 @@ public partial class App : Application
             }
 
             MessageBox.Show(
-                $"Replica를 시작할 수 없습니다.\n\n{exception.Message}",
+                "Replica를 시작할 수 없습니다. 로그 폴더의 진단 정보를 확인한 뒤 다시 시도하세요.",
                 "Replica",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

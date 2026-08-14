@@ -37,7 +37,7 @@
                     </ItemsControl>
                     <WrapPanel Margin="0,12,0,0">
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{x:Static nav:NavigationDestination.DiffViewer}" Content="Diff Viewer 열기" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{x:Static nav:NavigationDestination.RestorePlan}" Content="Restore Plan 검토" />
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DataContext.BuildRestorePlanCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="선택 항목으로 Restore Plan 만들기" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

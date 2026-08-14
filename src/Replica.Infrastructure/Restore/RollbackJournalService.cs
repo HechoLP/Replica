@@ -9,6 +9,7 @@ using Replica.Core.Execution;
 using Replica.Core.Planning;
 using Replica.Core.Rollback;
 using Replica.Core.Services;
+using Replica.Core.Snapshots;
 
 namespace Replica.Infrastructure.Restore;
 
@@ -412,8 +413,10 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                         path && action.RequiresAdministrator
                         ? EnvironmentVariableScope.Machine
                         : EnvironmentVariableScope.User;
-                    string name = path ? "PATH" : action.SourceDiffKey;
-                    if (IsSensitiveEnvironmentName(name))
+                    string name = path
+                        ? "PATH"
+                        : RestoreActionKeyParser.GetEnvironmentVariableName(action, scope);
+                    if (SensitiveEnvironmentPolicy.IsSensitiveName(name))
                     {
                         throw new InvalidOperationException("Sensitive environment values cannot enter the rollback journal.");
                     }
@@ -1155,17 +1158,6 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
 
         return Path.GetFullPath(expanded)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
-
-    private static bool IsSensitiveEnvironmentName(string name)
-    {
-        string normalized = name.Replace('-', '_').ToUpperInvariant();
-        return normalized.Contains("TOKEN", StringComparison.Ordinal) ||
-            normalized.Contains("SECRET", StringComparison.Ordinal) ||
-            normalized.Contains("PASSWORD", StringComparison.Ordinal) ||
-            normalized.Contains("KEY", StringComparison.Ordinal) ||
-            normalized.Contains("CREDENTIAL", StringComparison.Ordinal) ||
-            normalized.Contains("CONNECTION_STRING", StringComparison.Ordinal);
     }
 
     private static string? SerializeRegistryValue(object? value, RegistryValueDataKind kind)

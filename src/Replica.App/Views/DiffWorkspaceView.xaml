@@ -26,6 +26,7 @@
                     </Grid>
                     <TextBlock Margin="0,9,0,12" AutomationProperties.LiveSetting="Polite" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding StatusText}" TextWrapping="Wrap" />
                 </StackPanel>
+                <Button DockPanel.Dock="Bottom" Margin="0,12,0,0" HorizontalAlignment="Right" Style="{DynamicResource PrimaryActionButtonStyle}" Command="{Binding DataContext.BuildRestorePlanCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="선택 항목으로 Restore Plan 만들기" />
                 <DataGrid AutoGenerateColumns="False" CanUserAddRows="False" ItemsSource="{Binding Items}" AutomationProperties.Name="필터된 차이 목록">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Width="55" Header="선택" Binding="{Binding IsSelected}" />
