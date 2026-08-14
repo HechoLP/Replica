@@ -197,4 +197,11 @@ $hash = (Get-FileHash -LiteralPath $dmgPath -Algorithm SHA256).Hash.ToLowerInvar
     "$hash  $dmgName`n",
     [Text.UTF8Encoding]::new($false))
 
+$workRootPrefix = [IO.Path]::GetFullPath($workRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (!$resolvedOutput.StartsWith($workRootPrefix, [StringComparison]::Ordinal) -and
+    (Test-Path -LiteralPath $workRoot)) {
+    Remove-Item -LiteralPath $workRoot -Recurse -Force
+}
+
 Write-Host "Created $dmgName ($hash). The app is ad-hoc signed and not notarized."
