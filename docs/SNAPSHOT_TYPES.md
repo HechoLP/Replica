@@ -1,6 +1,6 @@
 # Snapshot types
 
-All snapshot types use the `.replica` extension and share a versioned manifest, inventory, plugin index, exclusions, recovery metadata, and checksums. A snapshot declares its type and source platform; the reader never infers stronger capabilities from archive contents alone. Existing Windows schema fields remain readable, while platform metadata prevents a macOS Snapshot from being treated as permission to run Windows restore actions.
+All snapshot types use the `.replica` extension and share a versioned manifest, inventory, plugin index, exclusions, recovery metadata, and checksums. Schema `1.1` requires an explicit source platform that agrees with the machine metadata; a mismatch is rejected. Legacy schema `1.0` is accepted only through a constrained compatibility path and is treated as Windows unless it already carries consistent, explicit macOS metadata. The reader never infers stronger capabilities from archive contents alone, and a macOS Snapshot is never treated as permission to run Windows restore actions.
 
 ## Lightweight Snapshot
 

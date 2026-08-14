@@ -6,6 +6,27 @@ All notable changes to Replica are documented in this file. The project follows 
 
 ### Added
 
+- Windows Snapshot opening now validates the archive, scans the current PC read-only, displays the Diff, and builds a typed plan from the user's selected rows and restore mode.
+- Finder `.replica` document opening now enters the same validated macOS inspection path as the file picker.
+
+### Changed
+
+- Built-in Windows plugins now run detection and capture during scanning; actual allow-listed values, compact files, exclusions, and partial failures are preserved in Snapshots.
+- macOS application discovery now handles bounded nested/system bundles, binary property lists, and thin Mach-O architecture metadata.
+- Pull-request CI now builds and verifies both macOS architectures, including exact Mach-O/Info.plist contracts and DMG read-back.
+
+### Security
+
+- Snapshot schema `1.1` requires consistent source-platform metadata and constrains legacy `1.0` migration.
+- Windows, macOS, and the Snapshot writer share sensitive environment-name detection; the Mac Preview retains values only for an explicit low-risk allow-list.
+- GitHub Release lookup on macOS now validates response shape, prerelease consistency, limits, and exact official Release paths.
+- Recovery review now displays every typed action and maps selected files beneath safe user-owned defaults instead of trusting source paths.
+- Restore planning now stops when a required current-PC inventory stage is incomplete, rejects rewritten sensitive environment entries, and invalidates stale approvals whenever the Snapshot or Diff selection changes.
+
+## [0.2.0-alpha.1] - 2026-08-12
+
+### Added
+
 - macOS 13+ Preview built with Avalonia for Apple Silicon and Intel Macs.
 - Read-only application bundle, Homebrew, environment/PATH, and font inventory on macOS.
 - macOS Lightweight Snapshot creation and hardened cross-platform Snapshot validation.
