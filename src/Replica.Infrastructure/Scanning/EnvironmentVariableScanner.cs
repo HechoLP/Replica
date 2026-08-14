@@ -1,6 +1,7 @@
 using System.Collections;
 using Replica.Core.Scanning;
 using Replica.Core.Services;
+using Replica.Core.Snapshots;
 
 namespace Replica.Infrastructure.Scanning;
 
@@ -40,16 +41,6 @@ public sealed class WindowsEnvironmentValueSource : IEnvironmentValueSource
 
 public sealed class EnvironmentVariableScanner : IEnvironmentVariableScanner
 {
-    private static readonly string[] SensitiveMarkers =
-    [
-        "TOKEN",
-        "SECRET",
-        "PASSWORD",
-        "KEY",
-        "CREDENTIAL",
-        "CONNECTION_STRING",
-    ];
-
     private readonly IEnvironmentValueSource _source;
 
     public EnvironmentVariableScanner(IEnvironmentValueSource source)
@@ -165,8 +156,6 @@ public sealed class EnvironmentVariableScanner : IEnvironmentVariableScanner
 
     private static string? FindSensitiveMarker(string name)
     {
-        string normalized = name.ToUpperInvariant();
-        return SensitiveMarkers.FirstOrDefault(marker =>
-            normalized.Contains(marker, StringComparison.Ordinal));
+        return SensitiveEnvironmentPolicy.FindSensitiveMarker(name);
     }
 }

@@ -51,13 +51,15 @@ public sealed class EnvironmentVariableScannerTests
                 ["SERVICE_TOKEN"] = "do-not-record",
                 ["NORMAL_SETTING"] = "visible",
                 ["DATABASE_CONNECTION_STRING"] = "secret-connection",
+                ["SIGNING_KEY"] = "private-key-material",
+                ["DOCKER_AUTH_CONFIG"] = "auth-material",
             },
         };
 
         EnvironmentVariableScanResult result = await new EnvironmentVariableScanner(source)
             .ScanAsync(CancellationToken.None);
 
-        Assert.Equal(2, result.SensitiveExclusionCount);
+        Assert.Equal(4, result.SensitiveExclusionCount);
         ScannedEnvironmentVariable token = result.Variables.Single(
             variable => variable.Name == "SERVICE_TOKEN");
         Assert.Null(token.Value);
@@ -65,7 +67,8 @@ public sealed class EnvironmentVariableScannerTests
         Assert.Equal("SensitiveName:TOKEN", token.ExclusionReason);
         Assert.DoesNotContain(
             result.Variables,
-            variable => variable.Value is "do-not-record" or "secret-connection");
+            variable => variable.Value is "do-not-record" or "secret-connection" or
+                "private-key-material" or "auth-material");
         Assert.Equal(
             "visible",
             result.Variables.Single(variable => variable.Name == "NORMAL_SETTING").Value);
