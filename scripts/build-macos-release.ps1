@@ -34,6 +34,60 @@ $appBundle = Join-Path $bundleRoot 'Replica.app'
 $contents = Join-Path $appBundle 'Contents'
 $macOsDirectory = Join-Path $contents 'MacOS'
 $resourcesDirectory = Join-Path $contents 'Resources'
+$expectedExecutableArchitecture = if ($Architecture -eq 'arm64') { 'arm64' } else { 'x86_64' }
+
+function Assert-BundleContract {
+    param(
+        [Parameter(Mandatory)]
+        [string] $BundlePath
+    )
+
+    $bundleContents = Join-Path $BundlePath 'Contents'
+    $bundleExecutable = Join-Path $bundleContents 'MacOS/Replica'
+    $bundlePlist = Join-Path $bundleContents 'Info.plist'
+    if (!(Test-Path -LiteralPath $bundleExecutable -PathType Leaf) -or
+        !(Test-Path -LiteralPath $bundlePlist -PathType Leaf)) {
+        throw 'The application bundle contract is incomplete.'
+    }
+
+    & /usr/bin/test -x $bundleExecutable
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The bundled Replica executable is not executable.'
+    }
+    & /usr/bin/lipo -verify_arch $expectedExecutableArchitecture $bundleExecutable
+    if ($LASTEXITCODE -ne 0) {
+        throw "The bundled executable does not contain the required $expectedExecutableArchitecture architecture."
+    }
+    $architectures = (& /usr/bin/lipo -archs $bundleExecutable).Trim()
+    if ($LASTEXITCODE -ne 0 -or $architectures -ne $expectedExecutableArchitecture) {
+        throw "The bundled executable architecture is '$architectures', expected exactly '$expectedExecutableArchitecture'."
+    }
+
+    & /usr/bin/plutil -lint $bundlePlist | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Info.plist validation failed.'
+    }
+    $expectedShortVersion = $Version.Split('-', 2)[0]
+    $expectedValues = @{
+        'CFBundleIdentifier' = 'com.hecholp.replica'
+        'CFBundleExecutable' = 'Replica'
+        'CFBundlePackageType' = 'APPL'
+        'CFBundleShortVersionString' = $expectedShortVersion
+        'CFBundleVersion' = $bundleVersion
+        'LSMinimumSystemVersion' = '13.0'
+    }
+    foreach ($key in $expectedValues.Keys) {
+        $actual = (& /usr/libexec/PlistBuddy -c "Print :$key" $bundlePlist).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actual -ne $expectedValues[$key]) {
+            throw "Info.plist value '$key' is '$actual', expected '$($expectedValues[$key])'."
+        }
+    }
+
+    & /usr/bin/codesign --verify --deep --strict $BundlePath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Replica.app failed code-signature verification.'
+    }
+}
 
 foreach ($directory in @($workRoot, $resolvedOutput)) {
     $resolvedDirectory = [IO.Path]::GetFullPath($directory)
@@ -91,6 +145,7 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) {
     throw 'Replica.app failed code-signature verification.'
 }
+Assert-BundleContract -BundlePath $appBundle
 
 & ln -s /Applications (Join-Path $bundleRoot 'Applications')
 if ($LASTEXITCODE -ne 0) {
@@ -102,6 +157,38 @@ $dmgPath = Join-Path $resolvedOutput $dmgName
 & hdiutil create -volname 'Replica' -srcfolder $bundleRoot -ov -format UDZO $dmgPath
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $dmgPath -PathType Leaf)) {
     throw 'DMG creation failed.'
+}
+
+& hdiutil verify $dmgPath | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw 'DMG verification failed.'
+}
+
+$mountPath = Join-Path $workRoot 'mounted-dmg'
+New-Item -ItemType Directory -Path $mountPath | Out-Null
+$mounted = $false
+try {
+    & hdiutil attach -readonly -nobrowse -mountpoint $mountPath $dmgPath | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The DMG could not be mounted read-only for verification.'
+    }
+    $mounted = $true
+    Assert-BundleContract -BundlePath (Join-Path $mountPath 'Replica.app')
+    $applicationsLink = Get-Item -LiteralPath (Join-Path $mountPath 'Applications') -Force
+    $linkTargets = @($applicationsLink.Target)
+    if ($applicationsLink.LinkType -ne 'SymbolicLink' -or
+        $linkTargets.Count -ne 1 -or
+        $linkTargets[0] -ne '/Applications') {
+        throw 'The DMG Applications link is invalid.'
+    }
+}
+finally {
+    if ($mounted) {
+        & hdiutil detach $mountPath | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The verified DMG could not be detached.'
+        }
+    }
 }
 
 $hash = (Get-FileHash -LiteralPath $dmgPath -Algorithm SHA256).Hash.ToLowerInvariant()

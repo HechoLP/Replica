@@ -118,15 +118,35 @@ jobs:
 
       - name: Build and verify Apple Silicon DMG
         shell: pwsh
-        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture arm64
+        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture arm64 -OutputDirectory artifacts/macos-release/arm64
 
-      - name: Verify macOS package checksum
+      - name: Build and verify Intel DMG
+        shell: pwsh
+        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture x64 -OutputDirectory artifacts/macos-release/x64
+
+      - name: Verify macOS package checksums
         shell: pwsh
         run: |
-          $name = 'Replica-macOS-arm64.dmg'
-          $expected = (Get-Content -LiteralPath "artifacts/macos-release/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
-          $actual = (Get-FileHash -LiteralPath "artifacts/macos-release/$name" -Algorithm SHA256).Hash
-          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'macOS CI package hash mismatch.' }
+          foreach ($architecture in @('arm64', 'x64')) {
+            $name = "Replica-macOS-$architecture.dmg"
+            $directory = "artifacts/macos-release/$architecture"
+            $expected = (Get-Content -LiteralPath "$directory/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+            $actual = (Get-FileHash -LiteralPath "$directory/$name" -Algorithm SHA256).Hash
+            if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw "macOS $architecture CI package hash mismatch." }
+          }
+
+      - name: Upload verified macOS packages
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: macos-ci-packages
+          path: |
+            artifacts/macos-release/arm64/Replica-macOS-arm64.dmg
+            artifacts/macos-release/arm64/Replica-macOS-arm64.dmg.sha256
+            artifacts/macos-release/x64/Replica-macOS-x64.dmg
+            artifacts/macos-release/x64/Replica-macOS-x64.dmg.sha256
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
 
       - name: Upload macOS test results
         if: always()
