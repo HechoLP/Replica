@@ -54,11 +54,11 @@ function Assert-BundleContract {
     if ($LASTEXITCODE -ne 0) {
         throw 'The bundled Replica executable is not executable.'
     }
-    & /usr/bin/lipo -verify_arch $expectedExecutableArchitecture $bundleExecutable
+    & /usr/bin/lipo $bundleExecutable -verify_arch $expectedExecutableArchitecture
     if ($LASTEXITCODE -ne 0) {
         throw "The bundled executable does not contain the required $expectedExecutableArchitecture architecture."
     }
-    $architectures = (& /usr/bin/lipo -archs $bundleExecutable).Trim()
+    $architectures = (& /usr/bin/lipo $bundleExecutable -archs).Trim()
     if ($LASTEXITCODE -ne 0 -or $architectures -ne $expectedExecutableArchitecture) {
         throw "The bundled executable architecture is '$architectures', expected exactly '$expectedExecutableArchitecture'."
     }
