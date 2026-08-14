@@ -32,6 +32,14 @@ public sealed class RestorePlanner : IRestorePlanner
             string referenceKey = ReferenceKey(item.Area, item.Key);
             hints.TryGetValue(referenceKey, out RestoreActionHint? hint);
             ActionClassification classification = Classify(item);
+            if (!classification.IsManualOnly &&
+                options.SupportedAutomaticActionTypes is not null &&
+                !options.SupportedAutomaticActionTypes.Contains(classification.Type))
+            {
+                classification = ActionClassification.Manual(
+                    "This difference requires a reviewed manual action because no allow-listed execution handler is available.");
+            }
+
             RestoreAction primary = CreatePrimaryAction(item, diff.Mode, classification, hint);
             RestoreAction? validation = classification.IsManualOnly
                 ? null

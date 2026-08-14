@@ -310,11 +310,9 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
                     null)).ToArray()
                 : [],
             IsCategorySelected("plugins")
-                ? scan.BuiltInPluginIds.Select(id => new ReplicaPluginSnapshot(
-                    id,
-                    appVersion.DisplayVersion,
-                    [],
-                    [])).ToArray()
+                ? (scan.BuiltInPluginSnapshots ?? [])
+                    .Select(snapshot => snapshot.ToReplicaSnapshot())
+                    .ToArray()
                 : []);
         IReadOnlyList<ReplicaExclusion> exclusions =
         [
@@ -324,6 +322,9 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
                     variable.Name,
                     "SensitiveEnvironmentVariable",
                     variable.ExclusionReason)),
+            .. scan.Warnings.Select(warning => new ReplicaExclusion(
+                warning.Provider,
+                $"CaptureWarning:{warning.Code}")),
             new("AppData", "BroadLocationExcluded"),
             new("Windows", "BroadLocationExcluded"),
             new("Program Files", "BroadLocationExcluded"),

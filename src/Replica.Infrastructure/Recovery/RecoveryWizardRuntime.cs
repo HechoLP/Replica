@@ -14,6 +14,17 @@ namespace Replica.Infrastructure.Recovery;
 
 public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
 {
+    private static readonly IReadOnlySet<RestoreActionType> SupportedRecoveryActionTypes =
+        new HashSet<RestoreActionType>
+        {
+            RestoreActionType.InstallPackage,
+            RestoreActionType.UpdatePackage,
+            RestoreActionType.SetUserEnvironmentVariable,
+            RestoreActionType.SetMachineEnvironmentVariable,
+            RestoreActionType.AddPathEntry,
+            RestoreActionType.RestoreRegistryValue,
+            RestoreActionType.RestoreSelectedUserFile,
+        };
     private readonly IEnvironmentDiffEngine _diffEngine;
     private readonly IEnvironmentScanner _environmentScanner;
     private readonly IRecoveryHardwareScanner _hardwareScanner;
@@ -79,6 +90,12 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
         EnvironmentScanResult current = await _environmentScanner.ScanAsync(
             null,
             cancellationToken).ConfigureAwait(false);
+        if (!current.IsRestorePlanningComplete)
+        {
+            throw new InvalidOperationException(
+                "The current computer scan is incomplete, so recovery planning cannot continue safely.");
+        }
+
         ReplicaHardwareInfo currentHardware = await _hardwareScanner.ScanAsync(cancellationToken)
             .ConfigureAwait(false);
         DiffEnvironmentState source = await BuildSourceStateAsync(
@@ -95,7 +112,10 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             target,
             DiffRestoreMode.Recommended,
             cancellationToken);
-        RestorePlan plan = _restorePlanner.CreatePlan(diff, cancellationToken: cancellationToken);
+        RestorePlan plan = _restorePlanner.CreatePlan(
+            diff,
+            new RestorePlanningOptions([], SupportedRecoveryActionTypes),
+            cancellationToken);
         (bool sufficient, long required, long available) = CheckStorage(mappings);
         return new RecoveryAnalysisResult(
             plan,
@@ -211,6 +231,12 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
     private static IReadOnlyList<RecoveryPathMapping> BuildSuggestedMappings(
         ReplicaSnapshotReadResult snapshot)
     {
+        string userProfile = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            throw new InvalidOperationException("The current user profile path is unavailable.");
+        }
+
         return snapshot.Recovery.SelectedFolders.Select(folder =>
         {
             string prefix = $"files/{folder.ArchivePath.Replace('\\', '/').Trim('/')}/";
@@ -219,7 +245,7 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
                 .Sum(artifact => artifact.Size);
             return new RecoveryPathMapping(
                 Path.GetFullPath(folder.SourcePath),
-                Path.GetFullPath(folder.SourcePath),
+                GetSafeSuggestedTarget(folder, userProfile),
                 folder.Category switch
                 {
                     ReplicaSelectedFolderCategory.ApplicationSettings => RecoveryPathMappingScope.ApplicationSetting,
@@ -230,6 +256,35 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
                 RestoreFileConflictBehavior.RenameAndKeepBoth,
                 bytes);
         }).ToArray();
+    }
+
+    private static string GetSafeSuggestedTarget(ReplicaSelectedFolder folder, string userProfile)
+    {
+        string? knownFolder = folder.Category switch
+        {
+            ReplicaSelectedFolderCategory.Desktop =>
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.DesktopDirectory),
+            ReplicaSelectedFolderCategory.Documents =>
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
+            _ => null,
+        };
+        if (!string.IsNullOrWhiteSpace(knownFolder))
+        {
+            return Path.GetFullPath(knownFolder);
+        }
+
+        string sourceName = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder.SourcePath));
+        char[] invalidCharacters = Path.GetInvalidFileNameChars();
+        string safeName = new(sourceName
+            .Where(character => !invalidCharacters.Contains(character) && !char.IsControl(character))
+            .Take(100)
+            .ToArray());
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = folder.Category.ToString();
+        }
+
+        return Path.GetFullPath(Path.Combine(userProfile, "Replica Restored", safeName));
     }
 
     private static async Task<DiffEnvironmentState> BuildSourceStateAsync(

@@ -11,6 +11,7 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
     private readonly IReadOnlyList<IBuiltInPlugin> _builtInPlugins;
     private readonly IEnvironmentVariableScanner _environmentVariableScanner;
     private readonly IFontScanner _fontScanner;
+    private readonly IDeveloperPluginHost _pluginHost;
     private readonly IWindowsInfoScanner _windowsInfoScanner;
 
     public EnvironmentScanner(
@@ -18,12 +19,14 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         IApplicationScanner applicationScanner,
         IEnvironmentVariableScanner environmentVariableScanner,
         IFontScanner fontScanner,
+        IDeveloperPluginHost pluginHost,
         IEnumerable<IBuiltInPlugin> builtInPlugins)
     {
         _windowsInfoScanner = windowsInfoScanner;
         _applicationScanner = applicationScanner;
         _environmentVariableScanner = environmentVariableScanner;
         _fontScanner = fontScanner;
+        _pluginHost = pluginHost;
         _builtInPlugins = builtInPlugins.ToArray();
     }
 
@@ -32,6 +35,7 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         CancellationToken cancellationToken)
     {
         List<ScanWarning> warnings = [];
+        HashSet<EnvironmentScanStage> incompleteStages = [];
         WindowsEnvironmentInfo? windows = null;
         ApplicationScanResult applications = new([], 0, []);
         EnvironmentVariableScanResult environment = new([], [], 0, []);
@@ -52,6 +56,7 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         }
         catch (Exception)
         {
+            incompleteStages.Add(EnvironmentScanStage.WindowsInformation);
             warnings.Add(new ScanWarning(
                 "Windows",
                 "WindowsInfoFailed",
@@ -71,6 +76,8 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         }
         catch (Exception)
         {
+            incompleteStages.Add(EnvironmentScanStage.Applications);
+            incompleteStages.Add(EnvironmentScanStage.StoreApplications);
             warnings.Add(new ScanWarning(
                 "Applications",
                 "ApplicationScanFailed",
@@ -95,6 +102,8 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         }
         catch (Exception)
         {
+            incompleteStages.Add(EnvironmentScanStage.EnvironmentVariables);
+            incompleteStages.Add(EnvironmentScanStage.Path);
             warnings.Add(new ScanWarning(
                 "Environment",
                 "EnvironmentScanFailed",
@@ -124,6 +133,7 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
         }
         catch (Exception)
         {
+            incompleteStages.Add(EnvironmentScanStage.Fonts);
             warnings.Add(new ScanWarning(
                 "Fonts",
                 "FontScanFailed",
@@ -135,9 +145,52 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
             6,
             TotalStages,
             "Built-in Plugin 정보를 확인하는 중입니다."));
-        string[] pluginIds = _builtInPlugins
-            .Select(plugin => plugin.Id)
-            .OrderBy(id => id, StringComparer.Ordinal)
+        List<PluginSnapshot> pluginSnapshots = [];
+        PluginCaptureContext pluginContext = new(_pluginHost);
+        foreach (IBuiltInPlugin plugin in _builtInPlugins.OrderBy(
+                     plugin => plugin.Id,
+                     StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                PluginDetectionResult detection = await plugin
+                    .DetectAsync(pluginContext, cancellationToken)
+                    .ConfigureAwait(false);
+                AddPluginWarnings(warnings, plugin.Id, detection.Warnings);
+                if (!detection.IsDetected)
+                {
+                    continue;
+                }
+
+                PluginSnapshot snapshot = await plugin
+                    .CaptureAsync(pluginContext, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!string.Equals(snapshot.PluginId, plugin.Id, StringComparison.Ordinal) ||
+                    !string.Equals(snapshot.PluginVersion, plugin.Version, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("The plugin returned inconsistent identity metadata.");
+                }
+
+                _ = snapshot.ToReplicaSnapshot();
+                pluginSnapshots.Add(snapshot);
+                AddPluginWarnings(warnings, plugin.Id, snapshot.Warnings);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                warnings.Add(new ScanWarning(
+                    $"Plugin:{plugin.Id}",
+                    "PluginCaptureFailed",
+                    "A built-in plugin could not be captured."));
+            }
+        }
+
+        string[] pluginIds = pluginSnapshots
+            .Select(snapshot => snapshot.PluginId)
             .ToArray();
 
         EnvironmentScanSummary summary = new(
@@ -161,6 +214,22 @@ public sealed class EnvironmentScanner : IEnvironmentScanner
             fonts.Fonts,
             pluginIds,
             warnings,
-            summary);
+            summary,
+            pluginSnapshots,
+            incompleteStages.Order().ToArray());
+    }
+
+    private static void AddPluginWarnings(
+        ICollection<ScanWarning> warnings,
+        string pluginId,
+        IReadOnlyList<string> pluginWarnings)
+    {
+        foreach (string _ in pluginWarnings)
+        {
+            warnings.Add(new ScanWarning(
+                $"Plugin:{pluginId}",
+                "PluginCaptureWarning",
+                "A built-in plugin reported an incomplete capture."));
+        }
     }
 }

@@ -1,3 +1,5 @@
+using Replica.Core.Plugins;
+
 namespace Replica.Core.Scanning;
 
 public enum EnvironmentScanStage
@@ -105,7 +107,18 @@ public sealed record EnvironmentScanResult(
     IReadOnlyList<ScannedFont> Fonts,
     IReadOnlyList<string> BuiltInPluginIds,
     IReadOnlyList<ScanWarning> Warnings,
-    EnvironmentScanSummary Summary);
+    EnvironmentScanSummary Summary,
+    IReadOnlyList<PluginSnapshot>? BuiltInPluginSnapshots = null,
+    IReadOnlyList<EnvironmentScanStage>? IncompleteStages = null)
+{
+    public bool IsRestorePlanningComplete => !(IncompleteStages ?? [])
+        .Any(stage => stage is
+            EnvironmentScanStage.WindowsInformation or
+            EnvironmentScanStage.Applications or
+            EnvironmentScanStage.StoreApplications or
+            EnvironmentScanStage.EnvironmentVariables or
+            EnvironmentScanStage.Path);
+}
 
 public sealed record WinGetScanResult(
     bool IsAvailable,

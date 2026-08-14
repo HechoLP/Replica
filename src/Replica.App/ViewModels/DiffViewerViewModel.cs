@@ -6,6 +6,7 @@ namespace Replica.App.ViewModels;
 public sealed partial class DiffViewerViewModel : ObservableObject
 {
     private IReadOnlyList<DiffItemRowViewModel> allItems = [];
+    private EnvironmentDiffResult? lastResult;
 
     [ObservableProperty]
     private IReadOnlyList<DiffScoreRowViewModel> _categoryScores = [];
@@ -43,7 +44,24 @@ public sealed partial class DiffViewerViewModel : ObservableObject
         "수동 작업 필요",
     ];
 
-    public void Display(EnvironmentDiffResult result)
+    public event Action? SelectionChanged;
+
+    public void Clear(string statusText)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(statusText);
+        lastResult = null;
+        allItems = [];
+        Items = [];
+        TreeGroups = [];
+        CategoryScores = [];
+        OverallScoreText = "전체 환경 일치율: 비교 전";
+        CoverageText = "비교 범위: 비교 전";
+        StatusText = statusText;
+    }
+
+    public void Display(
+        EnvironmentDiffResult result,
+        IReadOnlySet<DiffSelectionKey>? preservedSelection = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         OverallScoreText = result.Similarity.OverallScore is int score
@@ -61,6 +79,7 @@ public sealed partial class DiffViewerViewModel : ObservableObject
                 category.ComparableItemCount,
                 category.ExcludedItemCount))
             .ToArray();
+        lastResult = result;
         allItems = result.Items
             .Select(item => new DiffItemRowViewModel(
                 GetTypeName(item.Type),
@@ -76,12 +95,40 @@ public sealed partial class DiffViewerViewModel : ObservableObject
                 item.RequiresRestart ? "필요" : "불필요",
                 $"{item.SimilarityPercent}%",
                 item.ReasonCode,
-                GetRecommendation(item)))
+                GetRecommendation(item),
+                item.Area,
+                item.Key)
+            {
+                SelectionChanged = () => SelectionChanged?.Invoke(),
+                IsSelected = preservedSelection?.Contains(new DiffSelectionKey(item.Area, item.Key)) ??
+                    item.Type != DiffType.ExactMatch,
+            })
             .ToArray();
         ApplyFilter();
         StatusText = result.Items.Count == 0
             ? "비교 항목이 없습니다."
             : $"{result.Items.Count:N0}개 비교 항목을 검토할 수 있습니다.";
+    }
+
+    public IReadOnlySet<DiffSelectionKey> GetSelectedReferences() => allItems
+        .Where(item => item.IsSelected)
+        .Select(item => new DiffSelectionKey(item.SourceArea, item.SourceKey))
+        .ToHashSet();
+
+    public EnvironmentDiffResult GetSelectedDiff(DiffRestoreMode mode)
+    {
+        if (lastResult is null)
+        {
+            throw new InvalidOperationException("A Snapshot comparison must be displayed first.");
+        }
+
+        IReadOnlySet<DiffSelectionKey> selected = GetSelectedReferences();
+        return lastResult with
+        {
+            Mode = mode,
+            Items = lastResult.Items.Where(item =>
+                selected.Contains(new DiffSelectionKey(item.Area, item.Key))).ToArray(),
+        };
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
@@ -215,10 +262,31 @@ public sealed record DiffItemRowViewModel(
     string Restart,
     string Similarity,
     string Reason,
-    string Recommendation)
+    string Recommendation,
+    DiffArea SourceArea,
+    string SourceKey)
 {
-    public bool IsSelected { get; set; } = true;
+    private bool isSelected = true;
+
+    public Action? SelectionChanged { get; init; }
+
+    public bool IsSelected
+    {
+        get => isSelected;
+        set
+        {
+            if (isSelected == value)
+            {
+                return;
+            }
+
+            isSelected = value;
+            SelectionChanged?.Invoke();
+        }
+    }
 }
+
+public sealed record DiffSelectionKey(DiffArea Area, string Key);
 
 public sealed record DiffTreeGroupViewModel(
     string Name,

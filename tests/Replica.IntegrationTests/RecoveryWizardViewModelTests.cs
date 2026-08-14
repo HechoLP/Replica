@@ -1,5 +1,7 @@
 using Replica.App.Services;
 using Replica.App.ViewModels;
+using Replica.Core.Diffing;
+using Replica.Core.Planning;
 using Replica.Core.Recovery;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
@@ -52,6 +54,25 @@ public sealed class RecoveryWizardViewModelTests
 
         Assert.Contains("손상", viewModel.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("internal-sensitive-detail", dialogs.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnalyzeDisplaysEveryTypedRestoreActionBeforeApproval()
+    {
+        FakeRecoveryWizardService wizard = new();
+        RecoveryWizardViewModel viewModel = new(
+            wizard,
+            new FakeRecoveryDialogs { SnapshotPath = "recovery.replica" });
+        await viewModel.BeginAsync();
+
+        await viewModel.AnalyzeCommand.ExecuteAsync(null);
+
+        RestoreAction action = Assert.Single(viewModel.PlanActions);
+        Assert.Equal(RestoreActionType.InstallPackage, action.Type);
+        Assert.Equal("snapshot", action.OriginalValue);
+        Assert.Equal("current", action.CurrentValue);
+        Assert.Equal("target", action.TargetValue);
+        Assert.True(viewModel.CanApprovePlan);
     }
 
     private sealed class FakeRecoveryDialogs : IRecoveryDialogService
@@ -109,7 +130,10 @@ public sealed class RecoveryWizardViewModelTests
             string sessionId,
             IReadOnlyList<RecoveryPathMapping> mappings,
             ReadOnlyMemory<char> password,
-            CancellationToken cancellationToken) => Task.FromResult(CreateSession());
+            CancellationToken cancellationToken) => Task.FromResult(CreateSession(
+                plan: CreatePlan(),
+                status: RecoveryWizardStatus.AwaitingApproval,
+                step: RecoveryWizardStep.FinalApproval));
 
         public Task<RecoveryWizardSession> ApprovePlanAsync(
             string sessionId,
@@ -143,21 +167,25 @@ public sealed class RecoveryWizardViewModelTests
             string sessionId,
             CancellationToken cancellationToken) => Task.FromResult(CreateSession());
 
-        private static RecoveryWizardSession CreateSession(bool encrypted = false)
+        private static RecoveryWizardSession CreateSession(
+            bool encrypted = false,
+            RestorePlan? plan = null,
+            RecoveryWizardStatus status = RecoveryWizardStatus.InProgress,
+            RecoveryWizardStep step = RecoveryWizardStep.ShowSourceComputer)
         {
             DateTimeOffset now = DateTimeOffset.UtcNow;
             return new RecoveryWizardSession(
                 Guid.NewGuid().ToString("N"),
                 "recovery.replica",
                 Guid.NewGuid(),
-                RecoveryWizardStatus.InProgress,
-                RecoveryWizardStep.ShowSourceComputer,
+                status,
+                step,
                 "OLD-PC",
                 "11 24H2",
                 "x64",
                 "ko-KR",
                 encrypted,
-                null,
+                plan,
                 [],
                 [],
                 [],
@@ -170,6 +198,37 @@ public sealed class RecoveryWizardViewModelTests
                 false,
                 now,
                 now);
+        }
+
+        private static RestorePlan CreatePlan()
+        {
+            RestoreAction action = new(
+                "install",
+                RestoreActionType.InstallPackage,
+                "Install editor",
+                "Install the approved package.",
+                "snapshot",
+                "current",
+                "target",
+                DiffRiskLevel.Low,
+                false,
+                false,
+                false,
+                [],
+                TimeSpan.FromMinutes(1),
+                0,
+                true,
+                false,
+                DiffArea.Applications,
+                "Example.Editor",
+                "Missing");
+            return new RestorePlan(
+                "plan",
+                DiffRestoreMode.Recommended,
+                [action],
+                new RestoreDryRunSummary(1, 0, 0, 0, 0, 0, false, 0, 0, 1, TimeSpan.FromMinutes(1), 0),
+                RestorePlanReviewStatus.PendingReview,
+                DateTimeOffset.UtcNow);
         }
     }
 }

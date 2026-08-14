@@ -68,6 +68,7 @@ public static class AppBootstrapper
         services.AddSingleton<IReplicaInstallerDownloadService, ReplicaInstallerDownloadService>();
         services.AddSingleton<ISnapshotSelectionEstimator, SnapshotSelectionEstimator>();
         services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
+        services.AddSingleton<ISnapshotComparisonService, SnapshotComparisonService>();
         services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IDeveloperPluginHost, WindowsDeveloperPluginHost>();

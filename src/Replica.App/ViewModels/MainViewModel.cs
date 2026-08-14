@@ -1,7 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Replica.App.Services;
+using Replica.Core.Diffing;
 using Replica.Core.Models;
 using Replica.Core.Navigation;
+using Replica.Core.Planning;
 using Replica.Core.Scanning;
 using Replica.Core.Services;
 using Replica.Core.Snapshots;
@@ -14,6 +17,10 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IDialogService _dialogService;
     private readonly IEnvironmentScanner _environmentScanner;
     private readonly INavigationService _navigationService;
+    private readonly IEnvironmentDiffEngine? _diffEngine;
+    private readonly IRecoveryDialogService? _snapshotDialogs;
+    private readonly ISnapshotComparisonService? _snapshotComparisonService;
+    private readonly IRestorePlanner? _restorePlanner;
     private readonly IUpdateCheckService _updateCheckService;
     private readonly ReplicaUiSession _session;
 
@@ -74,12 +81,20 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsViewModel? settings = null,
         RestoreExecutionViewModel? execution = null,
         RestoreResultViewModel? result = null,
-        IReplicaPathProvider? pathProvider = null)
+        IReplicaPathProvider? pathProvider = null,
+        IRecoveryDialogService? snapshotDialogs = null,
+        ISnapshotComparisonService? snapshotComparisonService = null,
+        IEnvironmentDiffEngine? diffEngine = null,
+        IRestorePlanner? restorePlanner = null)
     {
         _appVersion = appVersion;
         _dialogService = dialogService;
         _environmentScanner = environmentScanner;
         _navigationService = navigationService;
+        _snapshotDialogs = snapshotDialogs;
+        _snapshotComparisonService = snapshotComparisonService;
+        _diffEngine = diffEngine;
+        _restorePlanner = restorePlanner;
         _updateCheckService = updateCheckService;
         _session = session ?? new ReplicaUiSession();
 
@@ -87,7 +102,9 @@ public sealed partial class MainViewModel : ObservableObject
         Tagline = localizationService.GetString("ProductTagline");
         Compatibility = compatibilityService.GetCompatibility();
         DiffViewer = diffViewer;
+        DiffViewer.SelectionChanged += InvalidateRestoreApproval;
         RestoreDryRun = restoreDryRun;
+        RestoreDryRun.ModeSelectionRequested += RebuildRestorePlan;
         Rollback = rollback;
         RecoveryWizard = recoveryWizard;
         SnapshotHistory = snapshotHistory;
@@ -217,7 +234,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             ScanStatus = "스캔이 취소되었습니다. PC는 변경되지 않았습니다.";
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             ScanStatus = "스캔을 완료하지 못했습니다. PC는 변경되지 않았습니다.";
             _dialogService.ShowMessage("현재 PC 스캔", ScanStatus);
@@ -257,11 +274,83 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenSnapshot()
+    private async Task OpenSnapshotAsync(CancellationToken cancellationToken)
     {
+        if (_snapshotDialogs is null || _snapshotComparisonService is null || _restorePlanner is null)
+        {
+            ShowPlannedFeature("Snapshot 열기");
+            return;
+        }
+
+        _session.ClearComparison();
+        RestoreDryRun.Invalidate("새 Snapshot 비교가 완료될 때까지 이전 Restore Plan은 실행할 수 없습니다.");
+        DiffViewer.Clear("Snapshot을 선택하면 무결성을 확인하고 현재 PC와 비교합니다.");
+
+        string? path = _snapshotDialogs.SelectRecoverySnapshot();
+        if (path is null)
+        {
+            return;
+        }
+
         _navigationService.Navigate(NavigationDestination.Comparison);
-        ShowPlannedFeature("Snapshot 열기");
+        DiffViewer.StatusText = "Snapshot 무결성을 확인하고 현재 PC를 읽기 전용으로 스캔하는 중입니다.";
+        try
+        {
+            SnapshotEnvironmentComparisonResult comparison;
+            try
+            {
+                comparison = await _snapshotComparisonService.CompareAsync(
+                    path,
+                    ReadOnlyMemory<char>.Empty,
+                    DiffRestoreMode.Safe,
+                    cancellationToken);
+            }
+            catch (ReplicaSnapshotDecryptionException)
+            {
+                char[]? password = _snapshotDialogs.RequestPassword(
+                    "암호화 Snapshot",
+                    "Snapshot 비밀번호를 입력하세요. 비밀번호는 저장하거나 기록하지 않습니다.");
+                if (password is null)
+                {
+                    DiffViewer.StatusText = "비밀번호 입력을 취소했습니다. PC는 변경되지 않았습니다.";
+                    return;
+                }
+
+                try
+                {
+                    comparison = await _snapshotComparisonService.CompareAsync(
+                        path,
+                        password,
+                        DiffRestoreMode.Safe,
+                        cancellationToken);
+                }
+                finally
+                {
+                    Array.Clear(password);
+                }
+            }
+
+            _session.LatestSnapshotPath = path;
+            _session.LatestScan = comparison.CurrentEnvironment;
+            _session.LatestSnapshotEnvironment = comparison.SnapshotEnvironment;
+            _session.LatestCurrentEnvironment = comparison.CurrentEnvironmentState;
+            _session.LatestDiff = comparison.Diff;
+            DiffViewer.Display(comparison.Diff);
+            BuildRestorePlan(DiffRestoreMode.Safe, navigate: false);
+        }
+        catch (OperationCanceledException)
+        {
+            DiffViewer.StatusText = "Snapshot 비교를 취소했습니다. PC는 변경되지 않았습니다.";
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            DiffViewer.StatusText = "Snapshot을 안전하게 열거나 비교하지 못했습니다. PC는 변경되지 않았습니다.";
+            _snapshotDialogs.ShowError("Snapshot 열기", DiffViewer.StatusText);
+        }
     }
+
+    [RelayCommand]
+    private void BuildRestorePlan() => BuildRestorePlan(RestoreDryRun.SelectedMode, navigate: true);
 
     [RelayCommand]
     private async Task RestoreAfterResetAsync(CancellationToken cancellationToken)
@@ -363,6 +452,66 @@ public sealed partial class MainViewModel : ObservableObject
         IsSnapshotTypePickerVisible = false;
         _navigationService.Navigate(NavigationDestination.SnapshotBuilder);
     }
+
+    private void RebuildRestorePlan(DiffRestoreMode mode) => BuildRestorePlan(mode, navigate: false);
+
+    private void InvalidateRestoreApproval()
+    {
+        if (RestoreDryRun.CanReview || RestoreDryRun.ReviewedPlan is not null)
+        {
+            RestoreDryRun.Invalidate("Diff 선택이 변경되어 이전 승인이 취소되었습니다. Restore Plan을 다시 만드세요.");
+        }
+    }
+
+    private void BuildRestorePlan(DiffRestoreMode mode, bool navigate)
+    {
+        if (_restorePlanner is null || _session.LatestDiff is null)
+        {
+            RestoreDryRun.StatusText = "먼저 Snapshot을 열고 현재 PC와 비교하세요.";
+            return;
+        }
+
+        try
+        {
+            IReadOnlySet<DiffSelectionKey> selection = DiffViewer.GetSelectedReferences();
+            if (_diffEngine is not null &&
+                _session.LatestSnapshotEnvironment is not null &&
+                _session.LatestCurrentEnvironment is not null)
+            {
+                EnvironmentDiffResult refreshed = _diffEngine.Compare(
+                    _session.LatestSnapshotEnvironment,
+                    _session.LatestCurrentEnvironment,
+                    mode);
+                _session.LatestDiff = refreshed;
+                DiffViewer.Display(refreshed, selection);
+            }
+
+            EnvironmentDiffResult selected = DiffViewer.GetSelectedDiff(mode);
+            RestorePlan plan = _restorePlanner.CreatePlan(
+                selected,
+                new RestorePlanningOptions([], SupportedInteractiveActionTypes));
+            RestoreDryRun.Display(plan);
+            if (navigate)
+            {
+                _navigationService.Navigate(NavigationDestination.RestorePlan);
+            }
+        }
+        catch (Exception)
+        {
+            RestoreDryRun.StatusText = "선택한 차이로 안전한 Restore Plan을 만들지 못했습니다.";
+        }
+    }
+
+    private static IReadOnlySet<RestoreActionType> SupportedInteractiveActionTypes { get; } =
+        new HashSet<RestoreActionType>
+        {
+            RestoreActionType.InstallPackage,
+            RestoreActionType.UpdatePackage,
+            RestoreActionType.SetUserEnvironmentVariable,
+            RestoreActionType.SetMachineEnvironmentVariable,
+            RestoreActionType.AddPathEntry,
+            RestoreActionType.Validate,
+        };
 
     private void UpdatePageMetadata(NavigationDestination destination)
     {

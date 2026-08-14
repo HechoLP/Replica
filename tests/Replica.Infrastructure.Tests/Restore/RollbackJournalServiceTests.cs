@@ -60,7 +60,7 @@ public sealed class RollbackJournalServiceTests : IDisposable
     {
         _environment.Set("REPLICA_TEST_HOME", "before", EnvironmentVariableScope.User);
         RollbackJournalService service = CreateService();
-        RestoreAction action = EnvironmentAction("environment", "REPLICA_TEST_HOME", "after", false);
+        RestoreAction action = EnvironmentAction("environment", "User:REPLICA_TEST_HOME", "after", false);
         await PrepareAsync(service, "environment-session", action);
         _environment.Set("REPLICA_TEST_HOME", "after", EnvironmentVariableScope.User);
         await MarkVerifiedAsync(service, "environment-session", action.Id);

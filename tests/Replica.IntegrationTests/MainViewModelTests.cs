@@ -1,7 +1,11 @@
 using System.Globalization;
+using Replica.App.Services;
 using Replica.App.ViewModels;
+using Replica.Core.Diffing;
+using Replica.Core.Matching;
 using Replica.Core.Models;
 using Replica.Core.Navigation;
+using Replica.Core.Planning;
 using Replica.Core.Rollback;
 using Replica.Core.Scanning;
 using Replica.Core.Services;
@@ -23,16 +27,91 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
-    public void PlannedCommand_ShowsMessageInsteadOfThrowing()
+    public async Task OpenSnapshotCommand_ValidatesScansComparesAndBuildsDryRun()
     {
-        MainViewModel viewModel = CreateViewModel(out FakeDialogService dialog, out _);
+        FakeRecoveryDialogs dialogs = new();
+        MainViewModel viewModel = CreateViewModel(
+            out FakeDialogService dialog,
+            out FakeNavigationService navigation,
+            snapshotDialogs: dialogs,
+            snapshotComparisonService: new FakeSnapshotComparisonService(),
+            restorePlanner: new RestorePlanner());
 
-        Exception? exception = Record.Exception(
-            () => viewModel.OpenSnapshotCommand.Execute(null));
+        await viewModel.OpenSnapshotCommand.ExecuteAsync(null);
 
-        Assert.Null(exception);
-        Assert.Contains("구현 예정", dialog.LastMessage, StringComparison.Ordinal);
-        Assert.Contains("변경하지 않습니다", dialog.LastMessage, StringComparison.Ordinal);
+        Assert.Equal(NavigationDestination.Comparison, navigation.CurrentDestination);
+        Assert.Single(viewModel.DiffViewer.Items);
+        Assert.Contains("1개 비교 항목", viewModel.DiffViewer.StatusText, StringComparison.Ordinal);
+        Assert.NotEmpty(viewModel.RestoreDryRun.Actions);
+        Assert.DoesNotContain("구현 예정", dialog.LastMessage, StringComparison.Ordinal);
+        Assert.Null(dialogs.LastError);
+    }
+
+    [Fact]
+    public async Task RestorePlan_UsesReviewedDiffSelectionAndRegeneratesForMode()
+    {
+        MainViewModel viewModel = CreateViewModel(
+            out _,
+            out FakeNavigationService navigation,
+            snapshotDialogs: new FakeRecoveryDialogs(),
+            snapshotComparisonService: new FakeSnapshotComparisonService(),
+            restorePlanner: new RestorePlanner());
+        await viewModel.OpenSnapshotCommand.ExecuteAsync(null);
+        Assert.NotEmpty(viewModel.RestoreDryRun.Actions);
+
+        viewModel.DiffViewer.Items[0].IsSelected = false;
+        viewModel.BuildRestorePlanCommand.Execute(null);
+
+        Assert.Equal(NavigationDestination.RestorePlan, navigation.CurrentDestination);
+        Assert.Empty(viewModel.RestoreDryRun.Actions);
+
+        viewModel.DiffViewer.Items[0].IsSelected = true;
+        viewModel.RestoreDryRun.SelectModeCommand.Execute(DiffRestoreMode.Recommended);
+        Assert.Equal(DiffRestoreMode.Recommended, viewModel.RestoreDryRun.SelectedMode);
+        Assert.NotEmpty(viewModel.RestoreDryRun.Actions);
+    }
+
+    [Fact]
+    public async Task DiffSelectionChange_InvalidatesPreviouslyApprovedPlan()
+    {
+        MainViewModel viewModel = CreateViewModel(
+            out _,
+            out _,
+            snapshotDialogs: new FakeRecoveryDialogs(),
+            snapshotComparisonService: new FakeSnapshotComparisonService(),
+            restorePlanner: new RestorePlanner());
+        await viewModel.OpenSnapshotCommand.ExecuteAsync(null);
+        viewModel.RestoreDryRun.ConfirmPlanCommand.Execute(null);
+        Assert.True(viewModel.RestoreDryRun.ReviewedPlan?.IsApproved);
+
+        viewModel.DiffViewer.Items[0].IsSelected = false;
+
+        Assert.Null(viewModel.RestoreDryRun.ReviewedPlan);
+        Assert.Empty(viewModel.RestoreDryRun.Actions);
+        Assert.Contains("승인이 취소", viewModel.RestoreDryRun.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailedNewSnapshotOpen_CannotLeavePreviousApprovedPlanExecutable()
+    {
+        FailOnSecondComparisonService comparison = new();
+        FakeRecoveryDialogs dialogs = new();
+        MainViewModel viewModel = CreateViewModel(
+            out _,
+            out _,
+            snapshotDialogs: dialogs,
+            snapshotComparisonService: comparison,
+            restorePlanner: new RestorePlanner());
+        await viewModel.OpenSnapshotCommand.ExecuteAsync(null);
+        viewModel.RestoreDryRun.ConfirmPlanCommand.Execute(null);
+        Assert.True(viewModel.RestoreDryRun.ReviewedPlan?.IsApproved);
+
+        await viewModel.OpenSnapshotCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.RestoreDryRun.ReviewedPlan);
+        Assert.Empty(viewModel.RestoreDryRun.Actions);
+        Assert.Empty(viewModel.DiffViewer.Items);
+        Assert.NotNull(dialogs.LastError);
     }
 
     [Fact]
@@ -92,7 +171,10 @@ public sealed class MainViewModelTests
         out FakeDialogService dialog,
         out FakeNavigationService navigation,
         IUpdateCheckService? updateService = null,
-        IEnvironmentScanner? environmentScanner = null)
+        IEnvironmentScanner? environmentScanner = null,
+        IRecoveryDialogService? snapshotDialogs = null,
+        ISnapshotComparisonService? snapshotComparisonService = null,
+        IRestorePlanner? restorePlanner = null)
     {
         dialog = new FakeDialogService();
         navigation = new FakeNavigationService();
@@ -106,7 +188,10 @@ public sealed class MainViewModelTests
             environmentScanner ?? new FakeEnvironmentScanner(),
             new DiffViewerViewModel(),
             new RestoreDryRunViewModel(),
-            new RollbackViewModel(new FakeRollbackService()));
+            new RollbackViewModel(new FakeRollbackService()),
+            snapshotDialogs: snapshotDialogs,
+            snapshotComparisonService: snapshotComparisonService,
+            restorePlanner: restorePlanner);
     }
 
     private sealed class FakeAppVersionService : IAppVersionService
@@ -237,6 +322,87 @@ public sealed class MainViewModelTests
                 new EnvironmentScanSummary(0, 0, 0, 0, 0, 0)));
         }
     }
+
+    private sealed class FakeRecoveryDialogs : IRecoveryDialogService
+    {
+        public string? LastError { get; private set; }
+
+        public string? SelectRecoverySnapshot() => "C:\\Fixture\\environment.replica";
+
+        public char[]? RequestPassword(string title, string message) => null;
+
+        public bool Confirm(string title, string message) => false;
+
+        public void ShowError(string title, string message) => LastError = message;
+    }
+
+    private sealed class FakeSnapshotComparisonService : ISnapshotComparisonService
+    {
+        public Task<SnapshotEnvironmentComparisonResult> CompareAsync(
+            string snapshotPath,
+            ReadOnlyMemory<char> password,
+            DiffRestoreMode mode,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DiffItem missing = new(
+                DiffType.Missing,
+                DiffArea.Applications,
+                "GIT.GIT",
+                "Git",
+                "2.50.0",
+                null,
+                ApplicationMatchConfidence.Exact,
+                true,
+                false,
+                false,
+                DiffRiskLevel.Low,
+                false,
+                false,
+                0,
+                "MissingSourceApplication");
+            EnvironmentDiffResult diff = new(
+                mode,
+                [missing],
+                new EnvironmentSimilarityScore(70, 100, 0, 0, 0, []));
+            return Task.FromResult(new SnapshotEnvironmentComparisonResult(
+                null!,
+                CreateScanResult(),
+                DiffEnvironmentState.Empty,
+                DiffEnvironmentState.Empty,
+                diff));
+        }
+    }
+
+    private sealed class FailOnSecondComparisonService : ISnapshotComparisonService
+    {
+        private readonly FakeSnapshotComparisonService successful = new();
+        private int callCount;
+
+        public Task<SnapshotEnvironmentComparisonResult> CompareAsync(
+            string snapshotPath,
+            ReadOnlyMemory<char> password,
+            DiffRestoreMode mode,
+            CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref callCount) > 1)
+            {
+                throw new InvalidDataException("Synthetic invalid Snapshot.");
+            }
+
+            return successful.CompareAsync(snapshotPath, password, mode, cancellationToken);
+        }
+    }
+
+    private static EnvironmentScanResult CreateScanResult() => new(
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        new EnvironmentScanSummary(0, 0, 0, 0, 0, 0));
 
     private sealed class FakeRollbackService : IRollbackService
     {

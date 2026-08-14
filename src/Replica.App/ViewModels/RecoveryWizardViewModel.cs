@@ -56,6 +56,8 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
     public ObservableCollection<RestoreActionExecutionResult> ActionResults { get; } = [];
 
+    public ObservableCollection<RestoreAction> PlanActions { get; } = [];
+
     public RestorePlan? Plan => _session?.Plan;
 
     public bool CanAnalyze => _session is
@@ -342,6 +344,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
         Replace(HardwareDifferences, session.HardwareDifferences);
         Replace(ManualActions, session.ManualActions);
         Replace(ActionResults, session.ActionResults);
+        Replace(PlanActions, session.Plan?.Actions ?? []);
         for (int index = 0; index < Steps.Count; index++)
         {
             Steps[index].State = index + 1 < (int)session.CurrentStep

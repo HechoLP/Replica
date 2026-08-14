@@ -69,7 +69,9 @@ public sealed record RestoreActionHint(
     long EstimatedDownloadBytes = 0,
     bool? CanRollback = null);
 
-public sealed record RestorePlanningOptions(IReadOnlyList<RestoreActionHint> Hints)
+public sealed record RestorePlanningOptions(
+    IReadOnlyList<RestoreActionHint> Hints,
+    IReadOnlySet<RestoreActionType>? SupportedAutomaticActionTypes = null)
 {
     public static RestorePlanningOptions Empty { get; } = new([]);
 }
