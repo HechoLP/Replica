@@ -35,7 +35,7 @@ jobs:
       DOTNET_NOLOGO: true
     steps:
       - name: Check out release tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -59,7 +59,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'The release tag is not reachable from the protected default branch.' }
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "commit_sha=$tagCommit`n", [Text.UTF8Encoding]::new($false))
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
           cache: true
@@ -112,7 +112,7 @@ jobs:
           if (!(Test-Path -LiteralPath (Join-Path $source 'ISCC.exe') -PathType Leaf)) { throw 'The Inno Setup compiler was not installed in the expected location.' }
           Copy-Item -LiteralPath $source -Destination artifacts/inno-tool -Recurse
       - name: Upload prepared Windows application
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replica-windows-prepared-${{ steps.version.outputs.version }}
           path: artifacts/publish/win-x64
@@ -120,7 +120,7 @@ jobs:
           retention-days: 1
           compression-level: 0
       - name: Upload reviewed Inno Setup tool
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replica-inno-tool-${{ steps.version.outputs.version }}
           path: artifacts/inno-tool
@@ -129,7 +129,7 @@ jobs:
           compression-level: 0
       - name: Upload release test results
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-test-results-${{ steps.version.outputs.version || github.run_id }}
           path: TestResults/**/*.trx
@@ -150,18 +150,18 @@ jobs:
       windows_signed: ${{ steps.signing.outputs.enabled }}
     steps:
       - name: Check out reviewed release scripts
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.build-windows.outputs.commit_sha }}
       - name: Download prepared Windows application
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-windows.outputs.prepared_app_artifact }}
           path: artifacts/publish/win-x64
       - name: Download reviewed Inno Setup tool
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-windows.outputs.inno_tool_artifact }}
           path: artifacts/inno-tool
@@ -250,7 +250,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
         run: ./scripts/prepare-release-assets.ps1 -Version $env:RELEASE_VERSION -ReleaseDirectory artifacts/release -OutputDirectory artifacts/release-package
       - name: Upload release package
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replica-release-${{ needs.build-windows.outputs.version }}
           path: |
@@ -276,13 +276,13 @@ jobs:
       DOTNET_NOLOGO: true
     steps:
       - name: Check out release tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.build-windows.outputs.commit_sha }}
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
           cache: true
@@ -313,7 +313,7 @@ jobs:
           $manifest = [ordered]@{ version = $env:RELEASE_VERSION; architecture = '${{ matrix.architecture }}'; replicaExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash }
           [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $executable.Path) 'prepared-release.json'), ($manifest | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
       - name: Upload prepared macOS application
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replica-macos-prepared-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
           path: artifacts/macos-${{ matrix.architecture }}/publish
@@ -335,13 +335,13 @@ jobs:
         architecture: [arm64, x64]
     steps:
       - name: Check out reviewed release scripts
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.build-windows.outputs.commit_sha }}
       - name: Download prepared macOS application
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: replica-macos-prepared-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
           path: artifacts/macos-${{ matrix.architecture }}/publish
@@ -424,7 +424,7 @@ jobs:
           if (![string]::IsNullOrWhiteSpace($env:REPLICA_APPLE_KEYCHAIN_PATH) -and (Test-Path -LiteralPath $env:REPLICA_APPLE_KEYCHAIN_PATH)) { & security lock-keychain $env:REPLICA_APPLE_KEYCHAIN_PATH; if ($LASTEXITCODE -ne 0) { throw 'Could not lock the temporary Apple signing keychain.' }; & security delete-keychain $env:REPLICA_APPLE_KEYCHAIN_PATH; if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $env:REPLICA_APPLE_KEYCHAIN_PATH)) { throw 'Could not prove deletion of the temporary Apple signing keychain.' } }
           foreach ($path in @($env:REPLICA_APPLE_P12_PATH, $env:REPLICA_APPLE_NOTARY_KEY_PATH)) { if (![string]::IsNullOrWhiteSpace($path)) { if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }; if (Test-Path -LiteralPath $path) { throw 'Temporary Apple signing material remained after cleanup.' } } }
       - name: Upload macOS release package
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replica-macos-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
           path: |
@@ -447,18 +447,18 @@ jobs:
       attestations: write
     steps:
       - name: Download release package
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
       - name: Download macOS release packages
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: replica-macos-${{ needs.package.outputs.version }}-*
           path: release-package
           merge-multiple: true
       - name: Attest release artifacts
-        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: release-package/*
 
@@ -474,12 +474,12 @@ jobs:
       contents: write
     steps:
       - name: Download verified release package
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
       - name: Download verified macOS packages
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: replica-macos-${{ needs.package.outputs.version }}-*
           path: release-package
