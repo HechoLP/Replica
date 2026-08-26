@@ -57,7 +57,7 @@ jobs:
           $tagCommit = (git rev-list -n 1 $env:RELEASE_TAG).Trim()
           git merge-base --is-ancestor $tagCommit $ancestorRef
           if ($LASTEXITCODE -ne 0) { throw 'The release tag is not reachable from the protected default branch.' }
-          "commit_sha=$tagCommit" >> $env:GITHUB_OUTPUT
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "commit_sha=$tagCommit`n", [Text.UTF8Encoding]::new($false))
       - name: Set up .NET 10
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -197,7 +197,7 @@ jobs:
           $expectedPublisher = if ([string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { '' } else { $env:PUBLISHER_CERTIFICATE_SHA256.ToUpperInvariant() }
           $executableHash = (Get-FileHash -LiteralPath artifacts/publish/win-x64/Replica.exe -Algorithm SHA256).Hash
           if ($manifest.version -ne $env:RELEASE_VERSION -or $manifest.publisherCertificateSha256 -ne $expectedPublisher -or $manifest.replicaExeSha256 -ne $executableHash) { throw 'The prepared Windows application failed isolated-runner digest validation.' }
-          "iscc_path=$iscc" >> $env:GITHUB_OUTPUT
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "iscc_path=$iscc`n", [Text.UTF8Encoding]::new($false))
       - name: Configure protected Windows signing identity
         id: signing
         shell: powershell
@@ -210,19 +210,19 @@ jobs:
           $hasCertificate = ![string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)
           $hasPassword = ![string]::IsNullOrWhiteSpace($env:SIGNING_PFX_PASSWORD)
           if ($hasCertificate -ne $hasPassword) { throw 'Both Windows signing secrets must be configured together.' }
-          if (!$hasCertificate) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires the protected Windows Authenticode signing identity.' }; 'enabled=false' >> $env:GITHUB_OUTPUT; exit 0 }
+          if (!$hasCertificate) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires the protected Windows Authenticode signing identity.' }; [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enabled=false`n", [Text.UTF8Encoding]::new($false)); exit 0 }
           $pfxPath = Join-Path $env:RUNNER_TEMP 'replica-release-signing.pfx'
-          "REPLICA_SIGNING_PFX_PATH=$pfxPath" >> $env:GITHUB_ENV
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_SIGNING_PFX_PATH=$pfxPath`n", [Text.UTF8Encoding]::new($false))
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
           $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force)
           if ($null -eq $certificate -or !$certificate.HasPrivateKey) { throw 'The protected Windows signing identity could not be imported with its private key.' }
-          "REPLICA_SIGNING_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_SIGNING_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)`n", [Text.UTF8Encoding]::new($false))
           $certificateSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($certificate.RawData))
           if ([string]::IsNullOrWhiteSpace($env:EXPECTED_CERTIFICATE_SHA256) -or !$certificateSha256.Equals($env:EXPECTED_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The protected signing identity does not match the public publisher certificate pin.' }
           Remove-Item -LiteralPath $pfxPath -Force
-          'enabled=true' >> $env:GITHUB_OUTPUT
-          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
-          "certificate_sha256=$certificateSha256" >> $env:GITHUB_OUTPUT
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enabled=true`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "thumbprint=$($certificate.Thumbprint)`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "certificate_sha256=$certificateSha256`n", [Text.UTF8Encoding]::new($false))
       - name: Sign prepared application and build signed installer
         shell: powershell
         env:
@@ -365,15 +365,15 @@ jobs:
         run: |
           $configured = @($env:APPLE_P12_BASE64, $env:APPLE_P12_PASSWORD, $env:APPLE_NOTARY_KEY_BASE64, $env:APPLE_NOTARY_KEY_ID, $env:APPLE_NOTARY_ISSUER_ID) | ForEach-Object { ![string]::IsNullOrWhiteSpace($_) }
           if ($configured -contains $true -and $configured -contains $false) { throw 'All Apple Developer ID and notarization secrets must be configured together.' }
-          if ($configured -notcontains $true) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires Apple Developer ID signing and notarization credentials.' }; 'enabled=false' >> $env:GITHUB_OUTPUT; exit 0 }
+          if ($configured -notcontains $true) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires Apple Developer ID signing and notarization credentials.' }; [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enabled=false`n", [Text.UTF8Encoding]::new($false)); exit 0 }
           if ($env:EXPECTED_APPLE_CERTIFICATE_SHA256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'A protected Apple identity requires the public Developer ID certificate SHA-256 variable.' }
           $keychainPath = Join-Path $env:RUNNER_TEMP 'replica-release.keychain-db'
           $p12Path = Join-Path $env:RUNNER_TEMP 'replica-developer-id.p12'
           $notaryKeyPath = Join-Path $env:RUNNER_TEMP "AuthKey_$($env:APPLE_NOTARY_KEY_ID).p8"
           $keychainPassword = [Guid]::NewGuid().ToString('N')
-          "REPLICA_APPLE_KEYCHAIN_PATH=$keychainPath" >> $env:GITHUB_ENV
-          "REPLICA_APPLE_P12_PATH=$p12Path" >> $env:GITHUB_ENV
-          "REPLICA_APPLE_NOTARY_KEY_PATH=$notaryKeyPath" >> $env:GITHUB_ENV
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_APPLE_KEYCHAIN_PATH=$keychainPath`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_APPLE_P12_PATH=$p12Path`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_APPLE_NOTARY_KEY_PATH=$notaryKeyPath`n", [Text.UTF8Encoding]::new($false))
           [IO.File]::WriteAllBytes($p12Path, [Convert]::FromBase64String($env:APPLE_P12_BASE64))
           [IO.File]::WriteAllBytes($notaryKeyPath, [Convert]::FromBase64String($env:APPLE_NOTARY_KEY_BASE64))
           & security create-keychain -p $keychainPassword $keychainPath
@@ -398,10 +398,10 @@ jobs:
           & xcrun notarytool store-credentials $profile --key $notaryKeyPath --key-id $env:APPLE_NOTARY_KEY_ID --issuer $env:APPLE_NOTARY_ISSUER_ID --keychain $keychainPath
           if ($LASTEXITCODE -ne 0) { throw 'Could not configure the temporary notarization profile.' }
           Remove-Item -LiteralPath $notaryKeyPath -Force
-          'enabled=true' >> $env:GITHUB_OUTPUT
-          "identity=$identity" >> $env:GITHUB_OUTPUT
-          "profile=$profile" >> $env:GITHUB_OUTPUT
-          "keychain_path=$keychainPath" >> $env:GITHUB_OUTPUT
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enabled=true`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "identity=$identity`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "profile=$profile`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "keychain_path=$keychainPath`n", [Text.UTF8Encoding]::new($false))
       - name: Create signed app bundle and notarized DMG
         shell: pwsh
         env:

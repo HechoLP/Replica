@@ -110,6 +110,14 @@ try {
         }
     }
 
+    if ($workflow -match '(?m)>>\s*\$env:GITHUB_(?:OUTPUT|ENV)') {
+        throw 'Release workflow writes GitHub environment files through shell redirection, which emits UTF-16 in Windows PowerShell 5.1.'
+    }
+    if ($workflow.IndexOf('[IO.File]::AppendAllText($env:GITHUB_OUTPUT', [StringComparison]::Ordinal) -lt 0 -or
+        $workflow.IndexOf('[Text.UTF8Encoding]::new($false)', [StringComparison]::Ordinal) -lt 0) {
+        throw 'Release workflow does not use explicit BOM-less UTF-8 GitHub output writes.'
+    }
+
     Write-Host 'Release version, trust, prerelease, and workflow syntax checks passed.'
 }
 finally {
