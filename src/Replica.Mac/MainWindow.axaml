@@ -18,7 +18,6 @@
           <TextBlock Text="macOS Preview" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" />
         </StackPanel>
         <StackPanel Grid.Row="1" Margin="0,40,0,0" Spacing="10">
-          <Button Content="홈" HorizontalContentAlignment="Left" Classes="primary" AutomationProperties.Name="홈" />
           <Button Content="현재 Mac 스캔" HorizontalContentAlignment="Left" Command="{Binding ScanCommand}" AutomationProperties.Name="현재 Mac 스캔" />
           <Button Content="Snapshot 열기" HorizontalContentAlignment="Left" Command="{Binding OpenSnapshotCommand}" AutomationProperties.Name="Snapshot 열기" />
           <Button Content="업데이트 확인" HorizontalContentAlignment="Left" Command="{Binding CheckUpdateCommand}" AutomationProperties.Name="업데이트 확인" />

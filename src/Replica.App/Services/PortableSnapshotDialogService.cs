@@ -33,6 +33,23 @@ public sealed class PortableSnapshotDialogService : IPortableSnapshotDialogServi
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
+    public string? SelectOfflineInstaller(string? initialDirectory)
+    {
+        OpenFileDialog dialog = new()
+        {
+            Title = "Offline Recovery Pack에 넣을 설치 파일 선택",
+            Filter = "지원 설치 파일 (*.exe;*.msi;*.msix;*.msixbundle;*.appx;*.appxbundle;*.cab;*.zip)|*.exe;*.msi;*.msix;*.msixbundle;*.appx;*.appxbundle;*.cab;*.zip",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))
+        {
+            dialog.InitialDirectory = initialDirectory;
+        }
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
     public bool ConfirmInstallerDownload(string destinationDirectory, string versionDescription) =>
         MessageBox.Show(
             $"공식 HechoLP/Replica GitHub Release의 {versionDescription} ReplicaSetup.exe를 다음 폴더에 저장합니다.\n\n" +

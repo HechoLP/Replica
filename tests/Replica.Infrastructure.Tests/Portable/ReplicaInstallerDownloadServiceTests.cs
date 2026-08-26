@@ -120,6 +120,30 @@ public sealed class ReplicaInstallerDownloadServiceTests : IDisposable
         Assert.Equal("v1.2.2", result.VersionTag);
     }
 
+    [Fact]
+    public async Task DownloadAsync_RejectsTemporaryPathReplacementBeforePublication()
+    {
+        byte[] content = Encoding.UTF8.GetBytes("mock installer bytes");
+        string hash = Convert.ToHexString(SHA256.HashData(content));
+        FakeReleaseSource source = new(CreateRelease(content.Length, hash), content);
+        ReplicaInstallerDownloadService service = new(
+            source,
+            new WritableStorageInspector(root),
+            new ReplacingHashService(content.Length));
+
+        await Assert.ThrowsAsync<ReplicaInstallerDownloadException>(() => service.DownloadAsync(
+            new ReplicaInstallerDownloadRequest(
+                root,
+                ReplicaReleaseSelection.LatestStable,
+                null,
+                UserApproved: true),
+            null,
+            CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(root, "ReplicaSetup.exe")));
+        Assert.Empty(Directory.EnumerateFiles(root, "*.download"));
+    }
+
     public void Dispose()
     {
         try
@@ -186,6 +210,26 @@ public sealed class ReplicaInstallerDownloadServiceTests : IDisposable
                 true,
                 null,
                 []));
+        }
+    }
+
+    private sealed class ReplacingHashService(long replacementSize) : IFileHashService
+    {
+        private int calls;
+
+        public async Task<string> ComputeSha256Async(
+            string filePath,
+            CancellationToken cancellationToken)
+        {
+            byte[] content = await File.ReadAllBytesAsync(filePath, cancellationToken);
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                byte[] replacement = Enumerable.Repeat((byte)'X', checked((int)replacementSize)).ToArray();
+                File.Delete(filePath);
+                await File.WriteAllBytesAsync(filePath, replacement, cancellationToken);
+            }
+
+            return Convert.ToHexString(SHA256.HashData(content));
         }
     }
 }

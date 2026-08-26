@@ -88,6 +88,52 @@ public sealed class RestoreExecutorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_CommitsJournalAfterMutationEvenWhenCallerCancels()
+    {
+        using CancellationTokenSource cancellation = new();
+        RestoreAction action = Action("cancel-after-mutation", []);
+        FakeHandler handler = new()
+        {
+            BeforeReturn = _ => cancellation.Cancel(),
+        };
+        FakeJournal journal = new();
+        RestoreExecutor executor = new([handler], new FakeElevationService());
+
+        RestoreExecutionResult result = await executor.ExecuteAsync(
+            Plan(action),
+            new FakeContext(journal),
+            new FakeProgressReporter(),
+            cancellation.Token);
+
+        Assert.Equal(RestoreExecutionState.Succeeded, Assert.Single(result.Actions).State);
+        Assert.Equal(
+            [RollbackJournalState.Applied, RollbackJournalState.Verified],
+            journal.MarkedStates);
+        Assert.All(journal.MarkTokensCanBeCancelled, Assert.False);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_StopsRemainingActionsWhenJournalFinalizationFails()
+    {
+        RestoreAction first = Action("first", []);
+        RestoreAction second = Action("second", []);
+        FakeHandler handler = new();
+        RestoreExecutor executor = new(
+            [handler],
+            new FakeElevationService());
+
+        RestoreExecutionResult result = await executor.ExecuteAsync(
+            Plan(first, second),
+            new FakeContext(new FakeJournal(failOnMark: true)),
+            new FakeProgressReporter(),
+            CancellationToken.None);
+
+        Assert.Equal("RecoveryJournalFinalizationFailed", result.Actions[0].ReasonCode);
+        Assert.Equal("JournalSafetyStop", result.Actions[1].ReasonCode);
+        Assert.Equal([first.Id], handler.ExecutedActionIds);
+    }
+
+    [Fact]
     public void RestoreExecutionStates_MatchExecutionContract()
     {
         Assert.Equal(
@@ -145,6 +191,8 @@ public sealed class RestoreExecutorTests
 
         public List<string> ExecutedActionIds { get; } = [];
 
+        public Action<RestoreAction>? BeforeReturn { get; init; }
+
         public bool CanHandle(RestoreActionType actionType) => true;
 
         public Task<RestoreActionExecutionResult> ExecuteAsync(
@@ -154,6 +202,7 @@ public sealed class RestoreExecutorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ExecutedActionIds.Add(action.Id);
+            BeforeReturn?.Invoke(action);
             bool failed = _failing.Contains(action.Id);
             return Task.FromResult(new RestoreActionExecutionResult(
                 action.Id,
@@ -163,9 +212,13 @@ public sealed class RestoreExecutorTests
         }
     }
 
-    private sealed class FakeJournal(bool shouldFail = false) : IRestoreJournal
+    private sealed class FakeJournal(bool shouldFail = false, bool failOnMark = false) : IRestoreJournal
     {
         public List<string> ActionIds { get; } = [];
+
+        public List<RollbackJournalState> MarkedStates { get; } = [];
+
+        public List<bool> MarkTokensCanBeCancelled { get; } = [];
 
         public Task RecordBeforeMutationAsync(
             RestoreJournalEntry entry,
@@ -186,7 +239,17 @@ public sealed class RestoreExecutorTests
             string actionId,
             RollbackJournalState state,
             string? mutationTargetPath,
-            CancellationToken cancellationToken) => Task.CompletedTask;
+            CancellationToken cancellationToken)
+        {
+            if (failOnMark)
+            {
+                throw new IOException("Test journal finalization failure.");
+            }
+
+            MarkedStates.Add(state);
+            MarkTokensCanBeCancelled.Add(cancellationToken.CanBeCanceled);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeContext(IRestoreJournal journal, bool isElevated = false) : IRestoreExecutionContext

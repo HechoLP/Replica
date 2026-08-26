@@ -15,11 +15,19 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
     private readonly IRecoveryDialogService _dialogs;
     private readonly IRecoveryWizardService _wizard;
     private RecoveryWizardSession? _session;
+    private CancellationTokenSource? _activeOperation;
 
     [ObservableProperty]
     private bool _isVisible;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AnalyzeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApprovePlanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryFailedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApproveRestartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmResumeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportOfflineInstallersCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -35,7 +43,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
     private string _resultText = string.Empty;
 
     [ObservableProperty]
-    private string _currentStepText = "1 / 19 · Recovery Snapshot 선택";
+    private string _currentStepText = "준비 · Recovery Snapshot 선택";
 
     public RecoveryWizardViewModel(
         IRecoveryWizardService wizard,
@@ -44,9 +52,12 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
         _wizard = wizard;
         _dialogs = dialogs;
         Steps = new ObservableCollection<RecoveryStepRow>(CreateSteps());
+        Phases = new ObservableCollection<RecoveryPhaseRow>(CreatePhases());
     }
 
     public ObservableCollection<RecoveryStepRow> Steps { get; }
+
+    public ObservableCollection<RecoveryPhaseRow> Phases { get; }
 
     public ObservableCollection<RecoveryPathMappingRow> PathMappings { get; } = [];
 
@@ -60,21 +71,27 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
     public RestorePlan? Plan => _session?.Plan;
 
-    public bool CanAnalyze => _session is
+    public bool CanAnalyze => !IsBusy && _session is
     {
         Status: RecoveryWizardStatus.InProgress,
-        CurrentStep: RecoveryWizardStep.ShowSourceComputer,
+        CurrentStep: RecoveryWizardStep.ShowSourceComputer or RecoveryWizardStep.ConfirmFileDestinations,
     };
 
-    public bool CanApprovePlan => _session?.Status == RecoveryWizardStatus.AwaitingApproval;
+    public bool CanApprovePlan => !IsBusy && _session?.Status == RecoveryWizardStatus.AwaitingApproval;
 
-    public bool CanExecute => _session is { Status: RecoveryWizardStatus.InProgress, Plan.IsApproved: true };
+    public bool CanExecute => !IsBusy && _session is
+    { Status: RecoveryWizardStatus.InProgress, Plan.IsApproved: true, ReviewBindingSha256: not null };
 
-    public bool CanRetry => _session?.CanRetry == true;
+    public bool CanRetry => !IsBusy && _session is { CanRetry: true, ReviewBindingSha256: not null };
 
-    public bool CanApproveRestart => _session?.Status == RecoveryWizardStatus.AwaitingRestartApproval;
+    public bool CanApproveRestart => !IsBusy &&
+        _session?.Status == RecoveryWizardStatus.AwaitingRestartApproval;
 
-    public bool CanConfirmResume => _session?.Status == RecoveryWizardStatus.AwaitingResumeConfirmation;
+    public bool CanConfirmResume => !IsBusy &&
+        _session?.Status == RecoveryWizardStatus.AwaitingResumeConfirmation;
+
+    public bool HasOfflineInstallers => ManualActions.Any(action =>
+        action.ReasonCode.Equals("OfflineInstallerAvailable", StringComparison.Ordinal));
 
     public string PlanSummary => Plan is null
         ? string.Empty
@@ -92,12 +109,12 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return;
         }
 
-        await RunAsync(async () =>
+        await RunAsync(async operationToken =>
         {
             RecoveryStartResult started = await _wizard.StartAsync(
                 path,
                 ReadOnlyMemory<char>.Empty,
-                cancellationToken);
+                operationToken);
             if (started.PasswordRequired)
             {
                 char[]? password = _dialogs.RequestPassword(
@@ -111,7 +128,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
                 try
                 {
-                    started = await _wizard.StartAsync(path, password, cancellationToken);
+                    started = await _wizard.StartAsync(path, password, operationToken);
                 }
                 finally
                 {
@@ -124,16 +141,16 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
                 Apply(started.Session);
                 StatusText = "Snapshot 무결성을 확인했습니다. 생성 PC 정보를 검토한 뒤 현재 PC를 분석하세요.";
             }
-        });
+        }, cancellationToken);
     }
 
     public async Task LoadResumeAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        await RunAsync(async () =>
+        await RunAsync(async operationToken =>
         {
             RecoveryWizardSession? session = await _wizard.LoadForResumeAsync(
                 sessionId,
-                cancellationToken);
+                operationToken);
             if (session is null)
             {
                 return;
@@ -142,7 +159,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             IsVisible = true;
             Apply(session);
             StatusText = "재부팅 전 복구 상태를 확인했습니다. 계속을 선택해야 최종 검증을 시작합니다.";
-        });
+        }, cancellationToken);
     }
 
     [RelayCommand(IncludeCancelCommand = true)]
@@ -153,18 +170,19 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return;
         }
 
-        await WithPasswordAsync(async password =>
+        await WithPasswordAsync(async (password, operationToken) =>
         {
             RecoveryWizardSession analyzed = await _wizard.AnalyzeAsync(
                 _session.SessionId,
                 PathMappings.Select(row => row.ToModel()).ToArray(),
                 password,
-                cancellationToken);
+                operationToken);
             Apply(analyzed);
             StatusText = analyzed.FailureReasonCode == "InsufficientStorage"
-                ? "대상 드라이브의 저장 공간이 부족합니다. 경로 매핑을 변경하세요."
+                ? $"대상 드라이브 공간이 부족합니다. 필요 {FormatBytes(analyzed.RequiredBytes)} · " +
+                  $"사용 가능 {FormatBytes(analyzed.AvailableBytes)}. 경로 매핑을 바꾼 뒤 다시 분석하세요."
                 : "차이 분석과 복원 계획을 만들었습니다. 계획을 검토하고 최종 승인하세요.";
-        });
+        }, cancellationToken);
     }
 
     [RelayCommand]
@@ -177,11 +195,13 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return;
         }
 
-        await RunAsync(async () =>
+        await RunAsync(async operationToken =>
         {
-            Apply(await _wizard.ApprovePlanAsync(_session.SessionId, cancellationToken));
+            string binding = _session.ReviewBindingSha256 ??
+                throw new InvalidOperationException("The displayed recovery review is no longer available.");
+            Apply(await _wizard.ApprovePlanAsync(_session.SessionId, binding, operationToken));
             StatusText = "복원 계획이 승인되었습니다. 실행 전 요약을 다시 확인하세요.";
-        });
+        }, cancellationToken);
     }
 
     [RelayCommand(IncludeCancelCommand = true)]
@@ -204,11 +224,11 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return;
         }
 
-        await RunAsync(async () =>
+        await RunAsync(async operationToken =>
         {
-            Apply(await _wizard.ApproveRestartAsync(_session.SessionId, true, cancellationToken));
+            Apply(await _wizard.ApproveRestartAsync(_session.SessionId, true, operationToken));
             StatusText = "로그인 후 재개가 등록되었습니다. 준비가 되면 Windows를 직접 재부팅하세요.";
-        });
+        }, cancellationToken);
     }
 
     [RelayCommand]
@@ -221,30 +241,68 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return;
         }
 
-        await WithPasswordAsync(async password =>
+        await WithPasswordAsync(async (password, operationToken) =>
         {
             Apply(await _wizard.ConfirmResumeAsync(
                 _session.SessionId,
                 password,
-                cancellationToken));
+                operationToken));
             StatusText = "재부팅 후 검증을 완료했습니다.";
-        });
+        }, cancellationToken);
     }
 
     [RelayCommand]
     private async Task CancelAsync(CancellationToken cancellationToken)
     {
+        if (IsBusy)
+        {
+            _activeOperation?.Cancel();
+            StatusText = "현재 단계의 안전한 중단을 요청했습니다. 진행 중인 파일 변경은 먼저 기록됩니다.";
+            return;
+        }
+
         if (_session is null)
         {
             IsVisible = false;
             return;
         }
 
-        await RunAsync(async () =>
+        await RunAsync(async operationToken =>
         {
-            Apply(await _wizard.CancelAsync(_session.SessionId, cancellationToken));
+            Apply(await _wizard.CancelAsync(_session.SessionId, operationToken));
             StatusText = "복구를 취소했습니다. 완료된 변경은 롤백 화면에서 검토할 수 있습니다.";
-        });
+        }, cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExportOfflineInstallers), IncludeCancelCommand = true)]
+    private async Task ExportOfflineInstallersAsync(CancellationToken cancellationToken)
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        string? destination = _dialogs.SelectOfflineInstallerExportFolder();
+        int count = ManualActions.Count(action =>
+            action.ReasonCode.Equals("OfflineInstallerAvailable", StringComparison.Ordinal));
+        if (destination is null || !_dialogs.Confirm(
+                "오프라인 설치 파일 내보내기",
+                $"검증된 설치 파일 {count:N0}개를 다음 폴더에 내보낼까요?\n\n{destination}\n\n" +
+                "기존 파일은 덮어쓰지 않으며 Replica가 설치 파일을 자동 실행하지 않습니다."))
+        {
+            return;
+        }
+
+        await WithPasswordAsync(async (password, operationToken) =>
+        {
+            OfflineInstallerExportResult result = await _wizard.ExportOfflineInstallersAsync(
+                _session.SessionId,
+                destination,
+                password,
+                operationToken);
+            StatusText = $"서명과 SHA-256을 다시 확인한 설치 파일 {result.Installers.Count:N0}개 " +
+                $"({FormatBytes(result.TotalBytes)})를 내보냈습니다. 실행 전 공급자와 라이선스를 확인하세요.";
+        }, cancellationToken);
     }
 
     private Task ExecuteWithPasswordAsync(bool retry, CancellationToken cancellationToken)
@@ -254,14 +312,19 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             return Task.CompletedTask;
         }
 
-        return WithPasswordAsync(async password =>
+        return WithPasswordAsync(async (password, operationToken) =>
         {
+            string binding = _session.ReviewBindingSha256 ??
+                throw new InvalidOperationException("The approved recovery review is no longer available.");
             RecoveryWizardSession result = retry
-                ? await _wizard.RetryFailedAsync(_session.SessionId, password, cancellationToken)
-                : await _wizard.ExecuteAsync(_session.SessionId, password, cancellationToken);
+                ? await _wizard.RetryFailedAsync(_session.SessionId, binding, password, operationToken)
+                : await _wizard.ExecuteAsync(_session.SessionId, binding, password, operationToken);
             Apply(result);
             StatusText = result.Status switch
             {
+                _ when result.FailureReasonCode is "PayloadCleanupPending" or
+                    "UserCancelledPayloadCleanupPending" =>
+                    "복구 작업은 중단되었지만 임시 복호화 파일 일부를 아직 지우지 못했습니다. Replica를 다시 연 뒤 이 복구 세션을 취소하거나 다시 시도하세요.",
                 RecoveryWizardStatus.AwaitingRestartApproval =>
                     "선택된 작업을 마쳤으며 재부팅이 필요합니다. 자동 재부팅은 하지 않습니다.",
                 RecoveryWizardStatus.Completed => "복원과 최종 검증을 완료했습니다.",
@@ -269,10 +332,12 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
                 _ when result.CanRetry => "일부 작업이 실패했습니다. 실패한 작업만 다시 시도할 수 있습니다.",
                 _ => "복원 실행 결과를 확인하세요.",
             };
-        });
+        }, cancellationToken);
     }
 
-    private async Task WithPasswordAsync(Func<ReadOnlyMemory<char>, Task> operation)
+    private async Task WithPasswordAsync(
+        Func<ReadOnlyMemory<char>, CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
     {
         char[]? password = null;
         if (_session?.SnapshotEncrypted == true)
@@ -288,7 +353,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
         try
         {
-            await RunAsync(() => operation(password ?? []));
+            await RunAsync(token => operation(password ?? [], token), cancellationToken);
         }
         finally
         {
@@ -299,12 +364,22 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
         }
     }
 
-    private async Task RunAsync(Func<Task> operation)
+    private async Task RunAsync(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
     {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken);
+        _activeOperation = linked;
         IsBusy = true;
         try
         {
-            await operation();
+            await operation(linked.Token);
         }
         catch (OperationCanceledException)
         {
@@ -320,13 +395,14 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             StatusText = "Snapshot이 손상되었거나 안전 요구사항을 충족하지 않습니다.";
             _dialogs.ShowError("Recovery Snapshot", StatusText);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText = $"복구 단계를 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "복구 단계를 안전하게 완료하지 못했습니다. 완료된 변경과 롤백 기록은 유지됩니다. 현재 단계의 입력을 확인한 뒤 다시 시도하세요.";
             _dialogs.ShowError("초기화 후 복구", StatusText);
         }
         finally
         {
+            _activeOperation = null;
             IsBusy = false;
         }
     }
@@ -336,7 +412,7 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
         _session = session;
         SourceComputerText = $"{session.SourceMachineName} · Windows {session.SourceWindowsVersion} · " +
             $"{session.SourceArchitecture} · {session.SourceLocale}";
-        CurrentStepText = $"{(int)session.CurrentStep} / 19 · {GetStepName(session.CurrentStep)}";
+        CurrentStepText = $"{GetPhaseName(session.CurrentStep)} · {GetStepName(session.CurrentStep)}";
         ScoreText = $"복원 전 일치율: {FormatScore(session.SimilarityBefore)} · " +
             $"복원 후 일치율: {FormatScore(session.SimilarityAfter)}";
 
@@ -352,6 +428,13 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
                 : index + 1 == (int)session.CurrentStep ? "현재" : "대기";
         }
 
+        foreach (RecoveryPhaseRow phase in Phases)
+        {
+            phase.State = (int)session.CurrentStep > phase.EndStep
+                ? "완료"
+                : (int)session.CurrentStep >= phase.StartStep ? "현재" : "대기";
+        }
+
         OnPropertyChanged(nameof(Plan));
         OnPropertyChanged(nameof(PlanSummary));
         OnPropertyChanged(nameof(CanAnalyze));
@@ -360,6 +443,8 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(CanApproveRestart));
         OnPropertyChanged(nameof(CanConfirmResume));
+        OnPropertyChanged(nameof(HasOfflineInstallers));
+        ExportOfflineInstallersCommand.NotifyCanExecuteChanged();
         ResultText = BuildResultText(session);
     }
 
@@ -383,6 +468,24 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
     private static IEnumerable<RecoveryStepRow> CreateSteps() => Enum.GetValues<RecoveryWizardStep>()
         .Select(step => new RecoveryStepRow((int)step, GetStepName(step), "대기"));
+
+    private static IEnumerable<RecoveryPhaseRow> CreatePhases() =>
+    [
+        new(1, "Snapshot 확인", 1, 4, "대기"),
+        new(2, "현재 PC 비교", 5, 9, "대기"),
+        new(3, "계획 검토", 10, 11, "대기"),
+        new(4, "선택 작업 복원", 12, 16, "대기"),
+        new(5, "결과 확인", 17, 19, "대기"),
+    ];
+
+    private static string GetPhaseName(RecoveryWizardStep step) => (int)step switch
+    {
+        <= 4 => "Snapshot 확인",
+        <= 9 => "현재 PC 비교",
+        <= 11 => "계획 검토",
+        <= 16 => "선택 작업 복원",
+        _ => "결과 확인",
+    };
 
     private static string GetStepName(RecoveryWizardStep step) => step switch
     {
@@ -409,6 +512,24 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
 
     private static string FormatScore(int? score) => score.HasValue ? $"{score.Value}%" : "-";
 
+    private static string FormatBytes(long? bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = Math.Max(bytes ?? 0, 0);
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    private bool CanExportOfflineInstallers() => !IsBusy &&
+        _session is not null &&
+        HasOfflineInstallers;
+
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)
     {
         target.Clear();
@@ -417,6 +538,29 @@ public sealed partial class RecoveryWizardViewModel : ObservableObject
             target.Add(item);
         }
     }
+}
+
+public sealed partial class RecoveryPhaseRow : ObservableObject
+{
+    [ObservableProperty]
+    private string _state;
+
+    public RecoveryPhaseRow(int number, string name, int startStep, int endStep, string state)
+    {
+        Number = number;
+        Name = name;
+        StartStep = startStep;
+        EndStep = endStep;
+        _state = state;
+    }
+
+    public int Number { get; }
+
+    public string Name { get; }
+
+    public int StartStep { get; }
+
+    public int EndStep { get; }
 }
 
 public sealed partial class RecoveryStepRow : ObservableObject

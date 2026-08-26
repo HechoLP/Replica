@@ -24,6 +24,8 @@ public interface IUpdateDownloadService
 
 public interface IUpdateInstallerService
 {
+    bool IsAutomaticInstallAvailable { get; }
+
     Task<UpdateInstallerLaunchResult> LaunchAsync(
         UpdateInstallerLaunchRequest request,
         CancellationToken cancellationToken);

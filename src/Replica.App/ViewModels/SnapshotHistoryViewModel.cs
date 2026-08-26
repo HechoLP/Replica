@@ -314,9 +314,9 @@ public sealed partial class SnapshotHistoryViewModel : ObservableObject
         {
             StatusText = "Snapshot을 열 수 없습니다. 비밀번호 또는 파일 상태를 확인하세요.";
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            StatusText = $"Snapshot 기록 작업을 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "Snapshot 기록 작업을 완료하지 못했습니다. 원본 Snapshot 파일은 변경하거나 삭제하지 않았습니다.";
         }
         finally
         {

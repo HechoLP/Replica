@@ -24,9 +24,13 @@ Selection is granular and reviewed before creation. Replica shows per-file and t
 
 ## Offline Recovery Pack
 
-Contains the complete Recovery payload and may add explicitly selected offline installers or plugin-supported installation material for applications that cannot conveniently be reacquired. The pack records provenance, version, architecture, hash, and licensing/redistribution warnings.
+Contains the complete Recovery payload and adds explicitly selected offline installers for applications that cannot conveniently be reacquired. Before selection, Windows must validate the file's Authenticode chain and bind its publisher name and publisher-certificate SHA-256. The pack records provenance, version, architecture, exact file SHA-256 and size, and licensing/redistribution warnings.
 
 Offline packs can be very large and carry higher supply-chain and data-retention risk, so they are never the default. Replica does not redistribute installers through its own release and does not assume that an installer may legally be copied.
+
+The Windows authoring UI requires provenance before file selection, rejects unsigned, untrusted, unverifiable, reparse-point, empty, and oversized files, and limits each pack to 100 installers. Changing the file list invalidates the prior size estimate and final approval. During archive creation, Replica rereads each payload and refuses the pack if the reviewed hash or size changed.
+
+After reset, the recovery workspace lists every installer as manual work. Export requires a separate destination and approval. Replica verifies the stored snapshot identity and whole-file SHA-256, extracts only declared installer entries to unique temporary names, checks archive hash/size metadata, revalidates Authenticode trust and the pinned publisher certificate, and never overwrites an existing file. Only verified files are moved into the destination, partial output is cleaned on failure, and Replica never executes them.
 
 ## Default exclusions
 

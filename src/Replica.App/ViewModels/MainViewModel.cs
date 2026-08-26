@@ -29,7 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
     private NavigationDestination _currentDestination = NavigationDestination.Home;
 
     [ObservableProperty]
-    private string _currentPageTitle = "Home";
+    private string _currentPageTitle = "시작";
 
     [ObservableProperty]
     private string _currentPageDescription = "Windows 환경을 스캔하고 안전한 Snapshot 및 복구 작업을 시작합니다.";
@@ -128,7 +128,7 @@ public sealed partial class MainViewModel : ObservableObject
             new SnapshotTypeOption(
                 SnapshotType.OfflineRecoveryPack,
                 "Offline Recovery Pack",
-                "선택한 오프라인 설치 자료를 포함할 수 있습니다."),
+                "선택 파일과 서명이 검증된 오프라인 설치 자료를 함께 보관합니다."),
         ];
 
         CurrentDestination = navigationService.CurrentDestination;
@@ -396,7 +396,7 @@ public sealed partial class MainViewModel : ObservableObject
             UpdateCheckStatus.UpdateAvailable =>
                 $"새 버전 {result.LatestRelease?.TagName}을(를) 사용할 수 있습니다.",
             UpdateCheckStatus.UpToDate => "현재 최신 버전을 사용하고 있습니다.",
-            _ => "업데이트 확인 기능은 준비 중입니다. 다운로드는 수행되지 않았습니다.",
+            _ => "업데이트 정보를 확인하지 못했습니다. 네트워크 상태를 확인하고 다시 시도하세요.",
         };
 
         _dialogService.ShowMessage("업데이트 확인", message);
@@ -517,18 +517,18 @@ public sealed partial class MainViewModel : ObservableObject
     {
         (CurrentPageTitle, CurrentPageDescription) = destination switch
         {
-            NavigationDestination.Home => ("Home", "Windows 환경을 스캔하고 안전한 Snapshot 및 복구 작업을 시작합니다."),
-            NavigationDestination.Scan => ("현재 PC 스캔", "Windows 정보와 프로그램·환경변수·글꼴·Built-in Plugin을 읽기 전용으로 확인합니다."),
-            NavigationDestination.SnapshotBuilder => ("Snapshot Builder", "포함 범위와 민감 제외, 암호화, 저장 위치를 검토한 뒤 Snapshot을 만듭니다."),
-            NavigationDestination.Comparison => ("Comparison", "Snapshot과 현재 PC의 전체 일치율과 차이 범주를 비교합니다."),
-            NavigationDestination.DiffViewer => ("Diff Viewer", "검색·필터·위험도와 원본·현재·목표 값을 검토하고 복원 대상을 선택합니다."),
-            NavigationDestination.RestorePlan => ("Restore Plan", "Safe·Recommended·Exact 모드의 Dry Run을 최종 승인 전에 검토합니다."),
+            NavigationDestination.Home => ("시작", "현재 PC 확인부터 Snapshot 생성, 비교와 복원까지 순서대로 진행합니다."),
+            NavigationDestination.Scan => ("현재 PC 확인", "프로그램과 설정 정보를 변경 없이 읽어 Snapshot 준비 상태를 확인합니다."),
+            NavigationDestination.SnapshotBuilder => ("Snapshot 만들기", "포함 범위와 민감 데이터 제외, 암호화, 저장 위치를 확인한 뒤 파일을 만듭니다."),
+            NavigationDestination.Comparison => ("Snapshot 비교 요약", "Snapshot과 현재 PC가 얼마나 같은지, 어떤 범주가 다른지 확인합니다."),
+            NavigationDestination.DiffViewer => ("복원할 항목 고르기", "현재 값과 Snapshot 값을 비교하고 복원할 항목만 선택합니다."),
+            NavigationDestination.RestorePlan => ("복원 계획 검토", "실제로 바뀔 항목과 권한·재부팅·롤백 가능 여부를 실행 전에 확인합니다."),
             NavigationDestination.RecoveryWizard => ("초기화 후 복구", "Recovery Snapshot 검증부터 최종 확인과 수동 작업까지 단계별로 진행합니다."),
-            NavigationDestination.Execution => ("Execution", "명시적으로 승인된 Restore Plan만 진행률과 결과를 표시하며 실행합니다."),
-            NavigationDestination.Result => ("Result", "복원 결과·재부팅·수동 작업과 Rollback 필요 여부를 확인합니다."),
-            NavigationDestination.SnapshotHistory => ("History", "Snapshot 비교와 복원·Rollback 기록을 관리합니다."),
-            NavigationDestination.Settings => ("Settings", "언어·Theme·기본 폴더·업데이트와 개인정보 설정을 관리합니다."),
-            NavigationDestination.About => ("About", "Replica 버전, 공식 GitHub 경로, 라이선스와 로그 위치를 확인합니다."),
+            NavigationDestination.Execution => ("선택 작업 복원", "승인한 작업만 실행하며 현재 단계와 안전한 취소 상태를 표시합니다."),
+            NavigationDestination.Result => ("복원 결과", "완료·실패·재부팅·수동 작업과 롤백 가능 여부를 확인합니다."),
+            NavigationDestination.SnapshotHistory => ("Snapshot 및 복원 기록", "Snapshot 비교와 복원·롤백 기록을 관리합니다."),
+            NavigationDestination.Settings => ("설정", "기본 Snapshot 폴더, 테마와 업데이트 채널을 관리합니다."),
+            NavigationDestination.About => ("Replica 정보", "버전, 공식 GitHub 경로, 라이선스와 로그 위치를 확인합니다."),
             _ => ("업데이트", "GitHub Releases에서 선택한 Channel의 업데이트를 안전하게 확인합니다."),
         };
     }

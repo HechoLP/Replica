@@ -21,6 +21,7 @@
                             <DataGridTextColumn Width="90" Header="점수" Binding="{Binding EnvironmentScore}" IsReadOnly="True" />
                         </DataGrid.Columns>
                     </DataGrid>
+                    <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="등록된 Snapshot이 없습니다. 기존 .replica 파일을 추가하거나 새 Snapshot을 만드세요."><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Snapshots.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                     <WrapPanel Margin="0,10,0,0"><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding SaveDetailsCommand}" Content="세부 정보 저장" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DeleteSnapshotCommand}" Content="삭제" /></WrapPanel>
                 </StackPanel>
             </Border>
@@ -34,11 +35,23 @@
             </Border>
             <Border DataContext="{Binding DataContext.Rollback, RelativeSource={RelativeSource AncestorType=Window}}" Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
-                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="복원 기록과 Rollback" />
+                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="복원 기록과 되돌리기" />
                     <TextBlock Margin="0,6,0,10" Foreground="{DynamicResource WarningBrush}" Text="Replica가 변경한 항목만 되돌리며 설치 프로그램은 자동 제거하지 않습니다." TextWrapping="Wrap" />
-                    <WrapPanel><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding RefreshSessionsCommand}" Content="최근 복원 세션" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding PreviewRollbackCommand}" Content="Rollback 미리보기" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ApproveRollbackCommand}" Content="Rollback 승인" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ExecuteRollbackCommand}" Content="Rollback 실행" /></WrapPanel>
+                    <WrapPanel><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding RefreshSessionsCommand}" Content="최근 복원 기록" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding PreviewRollbackCommand}" Content="되돌릴 내용 미리보기" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ApproveRollbackCommand}" Content="되돌리기 승인" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ExecuteRollbackCommand}" Content="되돌리기 실행" /></WrapPanel>
                     <TextBlock Margin="0,7,0,0" AutomationProperties.LiveSetting="Polite" Text="{Binding StatusText}" TextWrapping="Wrap" />
                     <DataGrid Margin="0,10,0,0" MaxHeight="230" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}" AutomationProperties.Name="복원 및 Rollback 세션"><DataGrid.Columns><DataGridTextColumn Width="220" Header="세션" Binding="{Binding SessionId}" /><DataGridTextColumn Width="130" Header="시각" Binding="{Binding UpdatedAt}" /><DataGridTextColumn Width="110" Header="상태" Binding="{Binding State}" /><DataGridTextColumn Width="90" Header="변경" Binding="{Binding ItemCount}" /><DataGridTextColumn Width="100" Header="자동" Binding="{Binding AutomaticCount}" /><DataGridTextColumn Width="100" Header="수동" Binding="{Binding ManualCount}" /></DataGrid.Columns></DataGrid>
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="승인할 정확한 대상과 효과" />
+                    <DataGrid MaxHeight="260" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding Items}" AutomationProperties.Name="Rollback 대상 미리보기">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="90" Header="선택" Binding="{Binding Selection}" />
+                            <DataGridTextColumn Width="150" Header="종류" Binding="{Binding Kind}" />
+                            <DataGridTextColumn Width="2*" Header="정확한 대상" Binding="{Binding Target}" />
+                            <DataGridTextColumn Width="2*" Header="되돌릴 내용" Binding="{Binding Effect}" />
+                            <DataGridTextColumn Width="190" Header="현재 파일 SHA-256" Binding="{Binding ExpectedCurrentSha256}" />
+                            <DataGridTextColumn Width="120" Header="관리자" Binding="{Binding Administrator}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="되돌릴 항목 미리보기가 없습니다. 복원 기록을 선택한 뒤 미리보기를 실행하세요."><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Items.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                 </StackPanel>
             </Border>
         </StackPanel>

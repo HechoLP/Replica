@@ -109,6 +109,8 @@ public sealed class SnapshotHistoryViewModelTests
 
         public string? SelectRecoverySnapshot() => "history.replica";
 
+        public string? SelectOfflineInstallerExportFolder() => null;
+
         public char[]? RequestPassword(string title, string message) => Password;
 
         public bool Confirm(string title, string message) => true;

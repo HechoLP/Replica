@@ -13,6 +13,10 @@ param(
     [string] $ChecksumPath,
 
     [Parameter()]
+    [ValidatePattern('^[0-9A-Fa-f]{64}$')]
+    [string] $ExpectedSignerCertificateSha256,
+
+    [Parameter()]
     [switch] $Install
 )
 
@@ -47,11 +51,23 @@ if ($installerInfo.ProductName.Trim() -ne 'Replica' -or $installerInfo.CompanyNa
 }
 
 $signature = Get-AuthenticodeSignature -LiteralPath $resolvedInstaller
-if ($signature.Status -eq [Management.Automation.SignatureStatus]::Valid) {
+if (![string]::IsNullOrWhiteSpace($ExpectedSignerCertificateSha256)) {
+    if ($signature.Status -ne [Management.Automation.SignatureStatus]::Valid -or
+        $null -eq $signature.SignerCertificate) {
+        throw "Expected a valid Authenticode signature, but found $($signature.Status)."
+    }
+    $actualSignerSha256 = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData($signature.SignerCertificate.RawData))
+    if (!$actualSignerSha256.Equals($ExpectedSignerCertificateSha256, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Installer signer certificate did not match the pinned publisher policy.'
+    }
     Write-Host "Authenticode: signed by $($signature.SignerCertificate.Subject)"
 }
-else {
+elseif ($signature.Status -eq [Management.Automation.SignatureStatus]::NotSigned) {
     Write-Host 'Authenticode: UNSIGNED (expected until a production certificate is configured)'
+}
+else {
+    throw "Installer Authenticode state is unsafe: $($signature.Status)"
 }
 
 if (!$Install) {

@@ -189,7 +189,17 @@ public sealed class MainViewModel : ObservableObject
             IsIndeterminate = false;
             Progress<ReplicaSnapshotProgress> progress = new(update =>
             {
-                ProgressValue = update.Stage == ReplicaSnapshotStage.Completed ? 100 : (int)update.Stage * 15;
+                bool hasByteProgress = update.TotalBytes > 0;
+                bool hasItemProgress = update.TotalItems > 0;
+                IsIndeterminate = update.Stage != ReplicaSnapshotStage.Completed &&
+                    !hasByteProgress && !hasItemProgress;
+                ProgressValue = update.Stage == ReplicaSnapshotStage.Completed
+                    ? 100
+                    : hasByteProgress
+                        ? (int)Math.Clamp(update.ProcessedBytes * 100 / update.TotalBytes, 0, 100)
+                        : hasItemProgress
+                            ? (int)Math.Clamp(update.CompletedItems * 100 / update.TotalItems, 0, 100)
+                            : 0;
                 Status = update.Stage switch
                 {
                     ReplicaSnapshotStage.Estimating => "포함 항목을 확인하는 중입니다.",

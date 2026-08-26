@@ -206,8 +206,9 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            string sessionDirectory = GetExistingSessionDirectory(sessionId);
             RollbackJournalManifest manifest = await ReadValidatedManifestAsync(
-                GetExistingSessionDirectory(sessionId),
+                sessionDirectory,
                 cancellationToken).ConfigureAwait(false);
             HashSet<string>? selected = selectedActionIds?.ToHashSet(StringComparer.Ordinal);
             if (selected is not null && selected.Any(id => manifest.Items.All(item => item.ActionId != id)))
@@ -215,17 +216,21 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                 throw new InvalidOperationException("The rollback selection contains an unknown item.");
             }
 
-            RollbackPreviewItem[] items = manifest.Items
-                .Reverse()
-                .Select(item => ToPreviewItem(
+            List<RollbackPreviewItem> items = [];
+            foreach (RollbackJournalItem item in manifest.Items.Reverse())
+            {
+                items.Add(await ToPreviewItemAsync(
+                    sessionDirectory,
                     item,
                     item.CanRollbackAutomatically &&
                     item.State != RollbackJournalState.RolledBack &&
-                    (selected is null || selected.Contains(item.ActionId))))
-                .ToArray();
+                    (selected is null || selected.Contains(item.ActionId)),
+                    cancellationToken).ConfigureAwait(false));
+            }
+
             return new RollbackPlan(
                 sessionId,
-                items,
+                items.ToArray(),
                 RollbackPlanReviewStatus.PendingReview,
                 _timeProvider.GetUtcNow());
         }
@@ -248,7 +253,6 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
             RollbackJournalManifest manifest = await ReadValidatedManifestAsync(
                 sessionDirectory,
                 cancellationToken).ConfigureAwait(false);
-            ValidatePlanMatchesManifest(approvedPlan, manifest);
             if (manifest.State == RollbackJournalState.RolledBack)
             {
                 return new RollbackExecutionResult(
@@ -258,6 +262,12 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                     false,
                     true);
             }
+
+            await ValidatePlanMatchesManifestAsync(
+                approvedPlan,
+                manifest,
+                sessionDirectory,
+                cancellationToken).ConfigureAwait(false);
 
             HashSet<string> selected = approvedPlan.Items
                 .Where(item => item.IsSelected)
@@ -282,7 +292,7 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                 RollbackItemResult result;
                 try
                 {
-                    await RollbackItemAsync(sessionDirectory, item, cancellationToken)
+                    await RollbackItemAsync(sessionDirectory, item, CancellationToken.None)
                         .ConfigureAwait(false);
                     result = new RollbackItemResult(
                         item.ActionId,
@@ -309,7 +319,7 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                     UpdatedAtUtc = _timeProvider.GetUtcNow(),
                     Items = items,
                 };
-                await SaveManifestAndChecksumsAsync(sessionDirectory, manifest, cancellationToken)
+                await SaveManifestAndChecksumsAsync(sessionDirectory, manifest, CancellationToken.None)
                     .ConfigureAwait(false);
                 results.Add(result);
                 completed++;
@@ -335,7 +345,7 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
                 sessionDirectory,
                 manifest,
                 finalState,
-                cancellationToken).ConfigureAwait(false);
+                CancellationToken.None).ConfigureAwait(false);
             return new RollbackExecutionResult(
                 manifest.SessionId,
                 finalState,
@@ -1209,8 +1219,33 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
             []);
     }
 
-    private static RollbackPreviewItem ToPreviewItem(RollbackJournalItem item, bool selected)
+    private async Task<RollbackPreviewItem> ToPreviewItemAsync(
+        string sessionDirectory,
+        RollbackJournalItem item,
+        bool selected,
+        CancellationToken cancellationToken)
     {
+        (string target, string effect) = item.ActionType switch
+        {
+            RestoreActionType.RestoreFile or RestoreActionType.RestoreSelectedUserFile =>
+                DescribeFile(await ReadDataAsync<RollbackFileData>(
+                    sessionDirectory,
+                    item.DataPath,
+                    cancellationToken).ConfigureAwait(false)),
+            RestoreActionType.SetUserEnvironmentVariable or
+                RestoreActionType.SetMachineEnvironmentVariable or
+                RestoreActionType.AddPathEntry =>
+                DescribeEnvironment(await ReadDataAsync<RollbackEnvironmentData>(
+                    sessionDirectory,
+                    item.DataPath,
+                    cancellationToken).ConfigureAwait(false)),
+            RestoreActionType.RestoreRegistryValue =>
+                DescribeRegistry(await ReadDataAsync<RollbackRegistryData>(
+                    sessionDirectory,
+                    item.DataPath,
+                    cancellationToken).ConfigureAwait(false)),
+            _ => (item.Name, item.ManualInstruction ?? "수동으로 검토합니다."),
+        };
         return new RollbackPreviewItem(
             item.ActionId,
             item.Name,
@@ -1219,7 +1254,37 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
             item.CanRollbackAutomatically,
             item.RequiresAdministrator,
             selected,
-            item.ManualInstruction);
+            item.ManualInstruction,
+            target,
+            effect,
+            item.AppliedValueSha256);
+    }
+
+    private static (string Target, string Effect) DescribeFile(RollbackFileData data)
+    {
+        return (
+            data.DestinationPath,
+            data.ExistedBefore
+                ? "복원 전 보관 사본으로 이 파일을 되돌립니다."
+                : "Replica가 새로 만든 이 파일을 삭제합니다.");
+    }
+
+    private static (string Target, string Effect) DescribeEnvironment(RollbackEnvironmentData data)
+    {
+        return (
+            $"{data.Scope} 환경 변수 · {data.Name}",
+            data.ExistedBefore
+                ? "이 변수의 복원 전 값을 되살립니다."
+                : "Replica가 만든 이 변수를 제거합니다.");
+    }
+
+    private static (string Target, string Effect) DescribeRegistry(RollbackRegistryData data)
+    {
+        return (
+            $"{data.Hive}\\{data.KeyPath} · {data.ValueName}",
+            data.ExistedBefore
+                ? "이 레지스트리 값의 복원 전 값을 되살립니다."
+                : "Replica가 만든 이 레지스트리 값을 제거합니다.");
     }
 
     private static RollbackJournalState CalculateSessionState(IReadOnlyList<RollbackJournalItem> items)
@@ -1305,9 +1370,11 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
         }
     }
 
-    private static void ValidatePlanMatchesManifest(
+    private async Task ValidatePlanMatchesManifestAsync(
         RollbackPlan plan,
-        RollbackJournalManifest manifest)
+        RollbackJournalManifest manifest,
+        string sessionDirectory,
+        CancellationToken cancellationToken)
     {
         if (plan.Items.Count != manifest.Items.Count)
         {
@@ -1317,9 +1384,21 @@ public sealed class RollbackJournalService : IRestoreJournal, IRollbackService
         foreach (RollbackPreviewItem preview in plan.Items)
         {
             RollbackJournalItem? item = manifest.Items.FirstOrDefault(candidate => candidate.ActionId == preview.ActionId);
+            RollbackPreviewItem? current = item is null
+                ? null
+                : await ToPreviewItemAsync(
+                    sessionDirectory,
+                    item,
+                    preview.IsSelected,
+                    cancellationToken).ConfigureAwait(false);
             if (item is null || item.Name != preview.Name || item.Kind != preview.Kind ||
+                item.State != preview.State ||
                 item.CanRollbackAutomatically != preview.CanRollbackAutomatically ||
-                item.RequiresAdministrator != preview.RequiresAdministrator)
+                item.RequiresAdministrator != preview.RequiresAdministrator ||
+                current is null || current.Target != preview.Target ||
+                current.Effect != preview.Effect ||
+                current.ExpectedCurrentSha256 != preview.ExpectedCurrentSha256 ||
+                current.ManualInstruction != preview.ManualInstruction)
             {
                 throw new InvalidOperationException("The rollback plan was modified or is stale.");
             }

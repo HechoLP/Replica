@@ -9,7 +9,7 @@ Replica needs a simple clean-install acquisition path, versioned artifacts, pre-
 
 ## Decision
 
-Use `HechoLP/Replica` GitHub Releases as the sole official distribution and update metadata channel. A tag-driven GitHub Actions workflow builds and tests on Windows, packages the self-contained application with Inno Setup, and publishes one user-facing asset named `ReplicaSetup.exe` plus SHA-256 checksum material.
+Use `HechoLP/Replica` GitHub Releases as the sole official distribution and update metadata channel. A protected default-branch, manually dispatched GitHub Actions workflow accepts an existing annotated tag reachable from `main`, builds and tests on Windows, packages the self-contained application with Inno Setup, and publishes one user-facing asset named `ReplicaSetup.exe` plus SHA-256 checksum material.
 
 SemVer prerelease tags map to GitHub pre-releases. Stable tags map to normal releases. In-app update checks use the GitHub Releases API, downloads require user consent, and checksum/signature status is displayed. Unsigned releases are labeled Unsigned.
 

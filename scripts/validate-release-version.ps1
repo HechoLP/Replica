@@ -11,7 +11,10 @@ param(
     [string] $GitHubOutputPath,
 
     [Parameter()]
-    [switch] $RequireGitTag
+    [switch] $RequireGitTag,
+
+    [Parameter()]
+    [string] $RequiredAncestorRef
 )
 
 Set-StrictMode -Version Latest
@@ -76,6 +79,23 @@ if ($RequireGitTag) {
     $headCommit = (& git -C $resolvedRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or !$tagCommit.Equals($headCommit, [StringComparison]::OrdinalIgnoreCase)) {
         throw "The checked-out commit does not match release tag '$Tag'."
+    }
+
+    if (![string]::IsNullOrWhiteSpace($RequiredAncestorRef)) {
+        & git -C $resolvedRoot check-ref-format $RequiredAncestorRef
+        if ($LASTEXITCODE -ne 0 -or !$RequiredAncestorRef.StartsWith('refs/remotes/origin/', [StringComparison]::Ordinal)) {
+            throw 'The required protected-branch reference is invalid.'
+        }
+
+        & git -C $resolvedRoot show-ref --verify --quiet $RequiredAncestorRef
+        if ($LASTEXITCODE -ne 0) {
+            throw "The protected default-branch reference '$RequiredAncestorRef' is unavailable."
+        }
+
+        & git -C $resolvedRoot merge-base --is-ancestor $tagCommit $RequiredAncestorRef
+        if ($LASTEXITCODE -ne 0) {
+            throw "Release tag '$Tag' is not reachable from protected default branch '$RequiredAncestorRef'."
+        }
     }
 }
 

@@ -4,7 +4,7 @@ The post-reset recovery wizard is the user-facing orchestrator for restoring a r
 
 ## Workflow
 
-The persisted state machine has 19 visible steps:
+The persisted state machine has 19 internal steps. The UI groups them into five beginner-facing phases—Snapshot confirmation, current-PC comparison, plan review, selected restoration, and result verification—while status text still identifies the active internal task:
 
 1. select a Recovery Snapshot;
 2. validate archive structure, schema, paths, and checksums;
@@ -28,6 +28,8 @@ The persisted state machine has 19 visible steps:
 
 Passwords are held only in a caller-owned character buffer, cleared after each operation, and never written to session state or logs. A corrupt archive or incorrect password produces a generic error that does not reveal cryptographic details.
 
+For an Offline Recovery Pack, the final phase also offers a separate verified export operation. It binds the request to the stored Snapshot ID and whole-file SHA-256, asks for a destination and confirmation, revalidates every declared installer's archive hash, size, Authenticode chain, and publisher-certificate SHA-256, refuses overwrite, and cleans partial output on failure. Exported installers stay in the manual-work list and are never launched by the wizard.
+
 ## Paths and conflicts
 
 Every selected source folder has an explicit mapping containing the source path, target path, scope, conflict policy, and estimated bytes. Removing a mapping excludes that folder from restoration. A mapping cannot escape its target root, and materialized payloads reject archive traversal, undeclared entries, checksum mismatches, duplicate entries, absolute paths, link-like entries, and reparse points.
@@ -46,7 +48,9 @@ Replica never initiates an automatic reboot. When an approved action reports a r
 Replica.exe --resume-recovery <SessionId>
 ```
 
-The argument parser accepts only the exact switch and a 32-character GUID. Registration is limited to the exact `HKCU` Run value `ReplicaRecoveryResume`, and the registry change is journaled before mutation. The session is checksum-protected and atomically stored under `%LOCALAPPDATA%\Replica\Recovery\Sessions\<SessionId>\session.json`.
+The argument parser accepts only the exact switch and a 32-character GUID. Registration is limited to the exact `HKCU` Run value `ReplicaRecoveryResume`, and the registry change is journaled before mutation. The bounded session is checksum-protected, stored beneath a protected user/Administrators/SYSTEM directory, and atomically replaced at `%LOCALAPPDATA%\Replica\Recovery\Sessions\<SessionId>\session.json`. Persisted state is still treated as untrusted: approval and execution require an in-memory review fingerprint covering snapshot identity, the full plan, mappings, and completed/failed retry selection.
+
+Decrypted payloads use a unique protected execution directory and are removed after the executor crosses its journal boundary. A failed deletion is persisted and shown as cleanup pending instead of being treated as success; explicit cancellation/retry reattempts deletion, and a bounded cross-session startup sweep removes abandoned payloads without following reparse points.
 
 After login, the normal unelevated UI opens and asks whether to continue. Completed action identifiers are persisted and are never scheduled again. Failed actions can be retried as a restricted subset. Resume registration is removed before final verification or cancellation.
 

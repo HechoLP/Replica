@@ -70,3 +70,10 @@ public interface IElevatedExecutorHost
         ElevatedExecutorArguments arguments,
         CancellationToken cancellationToken);
 }
+
+public interface IElevatedActionConsentService
+{
+    Task<bool> ConfirmAsync(
+        RestoreAction action,
+        CancellationToken cancellationToken);
+}

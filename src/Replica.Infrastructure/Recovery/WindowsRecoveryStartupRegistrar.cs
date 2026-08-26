@@ -65,7 +65,7 @@ public sealed class WindowsRecoveryStartupRegistrar : IRecoveryStartupRegistrar
             action.Id,
             RollbackJournalState.Applied,
             null,
-            cancellationToken).ConfigureAwait(false);
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task UnregisterAsync(
@@ -91,7 +91,7 @@ public sealed class WindowsRecoveryStartupRegistrar : IRecoveryStartupRegistrar
             action.Id,
             RollbackJournalState.Applied,
             null,
-            cancellationToken).ConfigureAwait(false);
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task RecordAsync(

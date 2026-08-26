@@ -11,7 +11,7 @@ namespace Replica.IntegrationTests;
 public sealed class RecoveryWizardViewModelTests
 {
     [Fact]
-    public async Task BeginCommand_OpensRecoverySnapshotAndDisplaysAllNineteenSteps()
+    public async Task BeginCommand_OpensRecoverySnapshotAndDisplaysFiveBeginnerPhases()
     {
         FakeRecoveryWizardService wizard = new();
         FakeRecoveryDialogs dialogs = new() { SnapshotPath = "recovery.replica" };
@@ -20,9 +20,9 @@ public sealed class RecoveryWizardViewModelTests
         await viewModel.BeginAsync();
 
         Assert.True(viewModel.IsVisible);
-        Assert.Equal(19, viewModel.Steps.Count);
+        Assert.Equal(5, viewModel.Phases.Count);
         Assert.Contains("OLD-PC", viewModel.SourceComputerText, StringComparison.Ordinal);
-        Assert.Contains("4 / 19", viewModel.CurrentStepText, StringComparison.Ordinal);
+        Assert.StartsWith("Snapshot 확인", viewModel.CurrentStepText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -75,17 +75,43 @@ public sealed class RecoveryWizardViewModelTests
         Assert.True(viewModel.CanApprovePlan);
     }
 
+    [Fact]
+    public async Task OfflinePackOffersReviewedManualInstallerExportWithoutExecution()
+    {
+        FakeRecoveryWizardService wizard = new() { IncludeOfflineInstaller = true };
+        FakeRecoveryDialogs dialogs = new()
+        {
+            SnapshotPath = "offline.replica",
+            ExportFolder = @"D:\Offline Installers",
+        };
+        RecoveryWizardViewModel viewModel = new(wizard, dialogs);
+        await viewModel.BeginAsync();
+
+        await viewModel.ExportOfflineInstallersCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.HasOfflineInstallers);
+        Assert.Equal(dialogs.ExportFolder, wizard.ExportedTo);
+        Assert.Contains("자동 실행하지 않습니다", dialogs.LastConfirmation, StringComparison.Ordinal);
+        Assert.Contains("1개", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
     private sealed class FakeRecoveryDialogs : IRecoveryDialogService
     {
         public string? SnapshotPath { get; init; }
 
         public char[]? PasswordToReturn { get; init; }
 
+        public string? ExportFolder { get; init; }
+
         public char[]? ReturnedPassword { get; private set; }
 
         public string LastError { get; private set; } = string.Empty;
 
+        public string LastConfirmation { get; private set; } = string.Empty;
+
         public string? SelectRecoverySnapshot() => SnapshotPath;
+
+        public string? SelectOfflineInstallerExportFolder() => ExportFolder;
 
         public char[]? RequestPassword(string title, string message)
         {
@@ -93,7 +119,11 @@ public sealed class RecoveryWizardViewModelTests
             return PasswordToReturn;
         }
 
-        public bool Confirm(string title, string message) => true;
+        public bool Confirm(string title, string message)
+        {
+            LastConfirmation = message;
+            return true;
+        }
 
         public void ShowError(string title, string message) => LastError = message;
     }
@@ -103,6 +133,10 @@ public sealed class RecoveryWizardViewModelTests
         public bool RequirePasswordOnFirstOpen { get; init; }
 
         public bool ThrowCorruptSnapshot { get; init; }
+
+        public bool IncludeOfflineInstaller { get; init; }
+
+        public string? ExportedTo { get; private set; }
 
         public int StartCalls { get; private set; }
 
@@ -123,7 +157,8 @@ public sealed class RecoveryWizardViewModelTests
             }
 
             return Task.FromResult(new RecoveryStartResult(CreateSession(
-                encrypted: RequirePasswordOnFirstOpen), false));
+                encrypted: RequirePasswordOnFirstOpen,
+                includeOfflineInstaller: IncludeOfflineInstaller), false));
         }
 
         public Task<RecoveryWizardSession> AnalyzeAsync(
@@ -137,15 +172,18 @@ public sealed class RecoveryWizardViewModelTests
 
         public Task<RecoveryWizardSession> ApprovePlanAsync(
             string sessionId,
+            string reviewedBindingSha256,
             CancellationToken cancellationToken) => Task.FromResult(CreateSession());
 
         public Task<RecoveryWizardSession> ExecuteAsync(
             string sessionId,
+            string reviewedBindingSha256,
             ReadOnlyMemory<char> password,
             CancellationToken cancellationToken) => Task.FromResult(CreateSession());
 
         public Task<RecoveryWizardSession> RetryFailedAsync(
             string sessionId,
+            string reviewedBindingSha256,
             ReadOnlyMemory<char> password,
             CancellationToken cancellationToken) => Task.FromResult(CreateSession());
 
@@ -167,14 +205,33 @@ public sealed class RecoveryWizardViewModelTests
             string sessionId,
             CancellationToken cancellationToken) => Task.FromResult(CreateSession());
 
+        public Task<OfflineInstallerExportResult> ExportOfflineInstallersAsync(
+            string sessionId,
+            string destinationDirectory,
+            ReadOnlyMemory<char> password,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ExportedTo = destinationDirectory;
+            return Task.FromResult(new OfflineInstallerExportResult(
+                destinationDirectory,
+                [new ExportedOfflineInstaller(
+                    "Example Setup",
+                    Path.Combine(destinationDirectory, "Setup.exe"),
+                    1024,
+                    new string('A', 64),
+                    "CN=Example")]));
+        }
+
         private static RecoveryWizardSession CreateSession(
             bool encrypted = false,
             RestorePlan? plan = null,
             RecoveryWizardStatus status = RecoveryWizardStatus.InProgress,
-            RecoveryWizardStep step = RecoveryWizardStep.ShowSourceComputer)
+            RecoveryWizardStep step = RecoveryWizardStep.ShowSourceComputer,
+            bool includeOfflineInstaller = false)
         {
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            return new RecoveryWizardSession(
+            RecoveryWizardSession session = new(
                 Guid.NewGuid().ToString("N"),
                 "recovery.replica",
                 Guid.NewGuid(),
@@ -188,7 +245,13 @@ public sealed class RecoveryWizardViewModelTests
                 plan,
                 [],
                 [],
-                [],
+                includeOfflineInstaller
+                    ? [new RecoveryManualAction(
+                        "offline-installer-1",
+                        "Example Setup",
+                        "Reviewed installer",
+                        "OfflineInstallerAvailable")]
+                    : [],
                 [],
                 [],
                 [],
@@ -197,7 +260,11 @@ public sealed class RecoveryWizardViewModelTests
                 false,
                 false,
                 now,
-                now);
+                now,
+                SnapshotSha256: new string('A', 64));
+            return plan is null
+                ? session
+                : session with { ReviewBindingSha256 = new string('B', 64) };
         }
 
         private static RestorePlan CreatePlan()

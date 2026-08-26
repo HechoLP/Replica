@@ -18,6 +18,16 @@ public sealed class RecoveryDialogService : IRecoveryDialogService
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
+    public string? SelectOfflineInstallerExportFolder()
+    {
+        OpenFolderDialog dialog = new()
+        {
+            Title = "검증된 오프라인 설치 파일을 내보낼 폴더 선택",
+            Multiselect = false,
+        };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
     public char[]? RequestPassword(string title, string message)
     {
         PasswordBox password = new() { MinWidth = 300 };

@@ -61,7 +61,7 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        ReplicaSnapshotReadResult snapshot = await ReadSnapshotAsync(
+        (ReplicaSnapshotReadResult snapshot, string snapshotSha256) = await ReadSnapshotWithDigestAsync(
             snapshotPath,
             password,
             cancellationToken).ConfigureAwait(false);
@@ -74,7 +74,8 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             snapshot.Manifest.Locale,
             snapshot.Manifest.CreatedAtUtc,
             snapshot.Manifest.Encryption is not null,
-            BuildSuggestedMappings(snapshot));
+            BuildSuggestedMappings(snapshot),
+            snapshotSha256);
     }
 
     public async Task<RecoveryAnalysisResult> AnalyzeAsync(
@@ -83,7 +84,7 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        ReplicaSnapshotReadResult snapshot = await ReadSnapshotAsync(
+        (ReplicaSnapshotReadResult snapshot, string snapshotSha256) = await ReadSnapshotWithDigestAsync(
             snapshotPath,
             password,
             cancellationToken).ConfigureAwait(false);
@@ -125,12 +126,16 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             BuildManualActions(snapshot),
             sufficient,
             required,
-            available);
+            available,
+            snapshot.Manifest.SnapshotId,
+            snapshotSha256);
     }
 
     public async Task<RecoveryExecutionBatch> ExecuteAsync(
         string sessionId,
         string snapshotPath,
+        Guid expectedSnapshotId,
+        string expectedSnapshotSha256,
         RestorePlan approvedPlan,
         IReadOnlyList<RecoveryPathMapping> mappings,
         IReadOnlySet<string> completedActionIds,
@@ -138,67 +143,105 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        ReplicaSnapshotReadResult snapshot = await ReadSnapshotAsync(
+        (ReplicaSnapshotReadResult snapshot, string snapshotSha256) = await ReadSnapshotWithDigestAsync(
             snapshotPath,
             password,
             cancellationToken).ConfigureAwait(false);
+        EnsureReviewedSnapshot(
+            snapshot,
+            snapshotSha256,
+            expectedSnapshotId,
+            expectedSnapshotSha256);
         RestorePlan remaining = BuildRemainingPlan(
             approvedPlan,
             completedActionIds,
             retryActionIds);
+        bool previousPayloadClean = await _materializer.CleanupSessionPayloadsAsync(
+            sessionId,
+            cancellationToken).ConfigureAwait(false);
         if (remaining.Actions.Count == 0)
         {
-            return new RecoveryExecutionBatch([], false, false);
+            return new RecoveryExecutionBatch(
+                [],
+                false,
+                false,
+                PayloadCleanupPending: !previousPayloadClean);
+        }
+
+        if (!previousPayloadClean)
+        {
+            throw new IOException(
+                "A previous recovery payload is still in use and could not be removed safely.");
         }
 
         MaterializedRecoveryPayload payload = await _materializer.MaterializeAsync(
             sessionId,
             snapshotPath,
             snapshot,
+            expectedSnapshotSha256,
             mappings,
             password,
             cancellationToken).ConfigureAwait(false);
-        Dictionary<string, FileRestoreRequest> requests = [];
-        foreach (RestoreAction action in remaining.Actions.Where(action =>
-                     action.Type == RestoreActionType.RestoreSelectedUserFile))
+        RestoreExecutionResult result;
+        try
         {
-            if (!payload.Files.TryGetValue(
-                    action.SourceDiffKey,
-                    out MaterializedRecoveryFile? file))
+            Dictionary<string, FileRestoreRequest> requests = [];
+            foreach (RestoreAction action in remaining.Actions.Where(action =>
+                         action.Type == RestoreActionType.RestoreSelectedUserFile))
             {
-                continue;
+                if (!payload.Files.TryGetValue(
+                        action.SourceDiffKey,
+                        out MaterializedRecoveryFile? file))
+                {
+                    continue;
+                }
+
+                requests[action.Id] = new FileRestoreRequest(
+                    payload.RootPath,
+                    file.MaterializedRelativePath,
+                    file.DestinationPath,
+                    [file.ApprovedRoot],
+                    file.Sha256,
+                    Math.Max(file.Size, 1),
+                    true,
+                    file.ConflictBehavior,
+                    _pathProvider.RollbackDirectory);
             }
 
-            requests[action.Id] = new FileRestoreRequest(
-                payload.RootPath,
-                file.MaterializedRelativePath,
-                file.DestinationPath,
-                [file.ApprovedRoot],
-                file.Sha256,
-                Math.Max(file.Size, 1),
-                true,
-                file.ConflictBehavior,
-                _pathProvider.RollbackDirectory);
+            RestoreExecutionContext context = new(
+                sessionId,
+                isElevated: false,
+                _restoreJournal,
+                requests);
+            result = await _restoreExecutor.ExecuteAsync(
+                remaining,
+                context,
+                new NullRestoreProgressReporter(),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            payload.Dispose();
         }
 
-        RestoreExecutionContext context = new(
-            sessionId,
-            isElevated: false,
-            _restoreJournal,
-            requests);
-        RestoreExecutionResult result = await _restoreExecutor.ExecuteAsync(
-            remaining,
-            context,
-            new NullRestoreProgressReporter(),
-            cancellationToken).ConfigureAwait(false);
         return new RecoveryExecutionBatch(
             result.Actions,
             result.RequiresRestart,
-            result.WasCancelled);
+            result.WasCancelled,
+            PayloadCleanupPending: payload.CleanupSucceeded != true);
+    }
+
+    public Task<bool> CleanupPayloadAsync(
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        return _materializer.CleanupSessionPayloadsAsync(sessionId, cancellationToken);
     }
 
     public async Task<RecoveryVerificationResult> VerifyAsync(
         string snapshotPath,
+        Guid expectedSnapshotId,
+        string expectedSnapshotSha256,
         IReadOnlyList<RecoveryPathMapping> mappings,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
@@ -208,6 +251,13 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             mappings,
             password,
             cancellationToken).ConfigureAwait(false);
+        if (analysis.SnapshotId != expectedSnapshotId ||
+            !FixedHashEquals(analysis.SnapshotSha256, expectedSnapshotSha256))
+        {
+            throw new ReplicaSnapshotException(
+                "The recovery snapshot changed before final verification.");
+        }
+
         return new RecoveryVerificationResult(
             analysis.SimilarityBefore,
             analysis.ManualActions);
@@ -226,6 +276,69 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             snapshot.Manifest.SourcePlatform,
             ReplicaPlatformFamily.Windows);
         return snapshot;
+    }
+
+    private async Task<(ReplicaSnapshotReadResult Snapshot, string Sha256)> ReadSnapshotWithDigestAsync(
+        string snapshotPath,
+        ReadOnlyMemory<char> password,
+        CancellationToken cancellationToken)
+    {
+        string before = await HashSnapshotAsync(snapshotPath, cancellationToken).ConfigureAwait(false);
+        ReplicaSnapshotReadResult snapshot = await ReadSnapshotAsync(
+            snapshotPath,
+            password,
+            cancellationToken).ConfigureAwait(false);
+        string after = await HashSnapshotAsync(snapshotPath, cancellationToken).ConfigureAwait(false);
+        if (!FixedHashEquals(before, after))
+        {
+            throw new ReplicaSnapshotException(
+                "The recovery snapshot changed while it was being validated.");
+        }
+
+        return (snapshot, after);
+    }
+
+    private static async Task<string> HashSnapshotAsync(
+        string snapshotPath,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream stream = new(
+            snapshotPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            128 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)
+            .ConfigureAwait(false));
+    }
+
+    private static void EnsureReviewedSnapshot(
+        ReplicaSnapshotReadResult snapshot,
+        string snapshotSha256,
+        Guid expectedSnapshotId,
+        string expectedSnapshotSha256)
+    {
+        if (snapshot.Manifest.SnapshotId != expectedSnapshotId ||
+            !FixedHashEquals(snapshotSha256, expectedSnapshotSha256))
+        {
+            throw new ReplicaSnapshotException(
+                "The recovery snapshot no longer matches the reviewed snapshot.");
+        }
+    }
+
+    private static bool FixedHashEquals(string first, string second)
+    {
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(first),
+                Convert.FromHexString(second));
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static IReadOnlyList<RecoveryPathMapping> BuildSuggestedMappings(
@@ -557,6 +670,20 @@ public sealed class RecoveryWizardRuntime : IRecoveryWizardRuntime
             Manual("browser-login", "브라우저 로그인", "Sign in to browsers and resynchronize through their official flows."),
             Manual("ssh-key", "SSH Key 복원", "Restore private keys separately from a trusted private backup."),
         ];
+        for (int index = 0; index < snapshot.Recovery.OfflineInstallers.Count; index++)
+        {
+            ReplicaOfflineInstaller installer = snapshot.Recovery.OfflineInstallers[index];
+            string version = string.IsNullOrWhiteSpace(installer.Version) ? "버전 미상" : installer.Version;
+            string license = string.IsNullOrWhiteSpace(installer.LicenseWarning)
+                ? "실행 전에 공급자의 라이선스와 사용 조건을 다시 확인하세요."
+                : installer.LicenseWarning;
+            actions.Add(new RecoveryManualAction(
+                $"offline-installer-{index + 1}",
+                $"오프라인 설치 파일 · {installer.DisplayName}",
+                $"{version} · {installer.Architecture} · 서명 게시자 {installer.Publisher} · " +
+                $"출처 {installer.Provenance}. {license} Replica는 이 파일을 자동 실행하지 않습니다.",
+                "OfflineInstallerAvailable"));
+        }
         AddIf("steam", "Steam 로그인", "Sign in to Steam and complete any guard verification.");
         AddIf("epic", "Epic 로그인", "Sign in through the Epic Games Launcher.");
         AddIf("xbox", "Xbox 로그인", "Sign in to Xbox services through Microsoft.");

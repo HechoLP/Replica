@@ -25,6 +25,15 @@ public sealed class PackageRestoreActionHandler : IRestoreActionHandler
         IRestoreExecutionContext context,
         CancellationToken cancellationToken)
     {
+        if (context.IsElevated)
+        {
+            return new RestoreActionExecutionResult(
+                action.Id,
+                RestoreExecutionState.Failed,
+                "ElevatedPackageExecutionBlocked",
+                "Package restore must run without Replica administrator privileges.");
+        }
+
         ApplicationMatchConfidence confidence = action.MatchConfidence ?? ApplicationMatchConfidence.Unknown;
         WinGetInstallResult result = await _installer.InstallAsync(
             new WinGetInstallRequest(

@@ -394,7 +394,7 @@ public sealed partial class PortableSnapshotViewModel : ObservableObject
             exception is PortableSnapshotException or ReplicaInstallerDownloadException or
             ReplicaSnapshotException or IOException or UnauthorizedAccessException or HttpRequestException)
         {
-            StatusText = $"작업을 안전하게 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "작업을 안전하게 완료하지 못했습니다. 대상 장치의 연결, 여유 공간과 쓰기 권한을 확인하세요.";
         }
         finally
         {

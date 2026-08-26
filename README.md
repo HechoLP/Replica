@@ -41,9 +41,9 @@ All Snapshot types use the versioned, ZIP-based `.replica` format with structure
 | --- | --- |
 | **Lightweight Snapshot** | Inventory, supported settings, exclusions, and recovery metadata; no personal files or application installers. |
 | **Recovery Snapshot** | Lightweight contents plus only explicitly selected folders and files. |
-| **Offline Recovery Pack** | Recovery contents plus explicitly selected, provenance-tracked offline installers where storage and redistribution are permitted. |
+| **Offline Recovery Pack** | Recovery contents plus explicitly selected offline installers whose Windows Authenticode trust, publisher certificate, SHA-256, size, provenance, architecture, and licensing warning have been reviewed. |
 
-Offline installers are never assumed to be redistributable, and an Offline Recovery Pack is not the default. See [Snapshot types](docs/SNAPSHOT_TYPES.md).
+Offline installers are never assumed to be redistributable. Windows accepts only trusted signed installers, revalidates their identity while writing and exporting, and never runs an exported installer automatically. See [Snapshot types](docs/SNAPSHOT_TYPES.md).
 
 ## Supported capabilities
 
@@ -56,7 +56,8 @@ The current source implements:
 - allow-listed winget, environment/PATH, registry, and selected-file restore handlers with narrow same-executable elevation;
 - rollback journals for Replica-owned file, environment, PATH, registry, and explicitly supported plugin changes;
 - post-reset recovery, Snapshot history and comparison, portable export, and GitHub Releases update checks;
-- Korean-default WPF UI with English resources, Light/Dark themes, keyboard navigation, high-contrast support, and asynchronous long-running commands.
+- reviewed Offline Recovery Pack authoring and post-reset verified installer export without automatic execution;
+- Korean WPF UI with persisted Light/Dark themes, task-oriented keyboard navigation, high-contrast support, and asynchronous cancellable long-running commands. The partial English resource dictionary is not offered as a complete language option.
 - macOS 13+ Avalonia Preview for Apple Silicon and Intel Macs, with read-only application-bundle/Homebrew/environment/PATH/font scanning, Lightweight Snapshot creation and validation, and GitHub Release update lookup.
 
 Automated tests use fakes and temporary data. They do not install software or change the real registry, environment, PATH, fonts, or user files.
@@ -93,7 +94,7 @@ The latest completed audit stages and remaining platform gaps are tracked in [Cr
 - The automatically generated **Source code (zip)** and **Source code (tar.gz)** files are not installers.
 - **Stable** Releases are recommended for normal use.
 - **Alpha** and **Beta** Releases are test versions and may contain incomplete or changing behavior.
-- Until production signing is configured, the Windows installer is clearly marked **Unsigned** and macOS apps are ad-hoc signed but **not notarized**. Verify the matching `.sha256` file before opening a download.
+- Stable release automation requires protected Windows Authenticode and Apple Developer ID/notarization credentials. An allowed prerelease without those credentials is clearly marked **Unsigned** on Windows and ad-hoc signed but **not notarized** on macOS. Verify the matching `.sha256` file before opening a download.
 - If the Releases page contains no published release, there is no official installer to download yet. Do not download executables offered through issues, pull requests, or third-party mirrors.
 
 All installers are self-contained; users do not separately install the .NET runtime. Windows installation is documented in [Windows installer](docs/WINDOWS_INSTALLER.md), and Mac installation and Preview boundaries are documented in [macOS support](docs/MACOS.md).
@@ -101,7 +102,7 @@ All installers are self-contained; users do not separately install the .NET runt
 ## Current limitations
 
 - Windows 11 x64 has the full migration and recovery workflow. macOS 13+ supports Apple Silicon and Intel as a read-only Preview; Recovery Snapshot creation, password entry for encrypted Snapshot opening, restore execution, rollback, and app self-update installation are not yet available in the Mac UI.
-- No Stable Release or production code-signing certificate has been established yet.
+- No Stable Release or production code-signing identity has been established for this repository yet; the release workflow is prepared to fail closed until protected identities are configured.
 - Hardware drivers, credentials, authentication sessions, paid licenses, private keys, browser profiles, entire WSL disks, containers, volumes, and full application directories are outside automatic recovery.
 - Low-confidence package matches, unsupported versions, hardware-dependent settings, and unrecognized configuration remain manual.
 - Replica never automatically removes extra applications, downgrades software, reboots Windows, or uninstalls programs during rollback.

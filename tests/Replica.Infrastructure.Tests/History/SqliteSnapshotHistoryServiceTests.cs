@@ -377,6 +377,8 @@ public sealed class SqliteSnapshotHistoryServiceTests : IDisposable
         public Task<RecoveryExecutionBatch> ExecuteAsync(
             string sessionId,
             string snapshotPath,
+            Guid expectedSnapshotId,
+            string expectedSnapshotSha256,
             RestorePlan approvedPlan,
             IReadOnlyList<RecoveryPathMapping> mappings,
             IReadOnlySet<string> completedActionIds,
@@ -386,8 +388,14 @@ public sealed class SqliteSnapshotHistoryServiceTests : IDisposable
 
         public Task<RecoveryVerificationResult> VerifyAsync(
             string snapshotPath,
+            Guid expectedSnapshotId,
+            string expectedSnapshotSha256,
             IReadOnlyList<RecoveryPathMapping> mappings,
             ReadOnlyMemory<char> password,
             CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<bool> CleanupPayloadAsync(
+            string sessionId,
+            CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }

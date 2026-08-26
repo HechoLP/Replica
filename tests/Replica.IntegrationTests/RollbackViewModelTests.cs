@@ -32,17 +32,37 @@ public sealed class RollbackViewModelTests
         Assert.Contains("롤백", viewModel.StatusText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task SelectingAnotherSessionInvalidatesPreviewAndApproval()
+    {
+        FakeRollbackService service = new() { IncludeSecondSession = true };
+        RollbackViewModel viewModel = new(service);
+        await viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+        await viewModel.PreviewRollbackCommand.ExecuteAsync(null);
+        viewModel.ApproveRollbackCommand.Execute(null);
+        Assert.True(viewModel.CanExecute);
+
+        viewModel.SelectedSession = viewModel.Sessions[1];
+
+        Assert.Empty(viewModel.Items);
+        Assert.False(viewModel.CanApprove);
+        Assert.False(viewModel.CanExecute);
+        Assert.False(viewModel.ExecuteRollbackCommand.CanExecute(null));
+    }
+
     private sealed class FakeRollbackService : IRollbackService
     {
         public int ExecutionCount { get; private set; }
+
+        public bool IncludeSecondSession { get; init; }
 
         public Task<IReadOnlyList<RollbackSessionSummary>> GetRecentSessionsAsync(
             int maximumCount,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<RollbackSessionSummary>>(
+            List<RollbackSessionSummary> sessions =
             [
-                new RollbackSessionSummary(
+                new(
                     "session-ui",
                     DateTimeOffset.UtcNow,
                     DateTimeOffset.UtcNow,
@@ -50,7 +70,20 @@ public sealed class RollbackViewModelTests
                     2,
                     1,
                     1),
-            ]);
+            ];
+            if (IncludeSecondSession)
+            {
+                sessions.Add(new(
+                    "session-ui-2",
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow,
+                    RollbackJournalState.Verified,
+                    1,
+                    1,
+                    0));
+            }
+
+            return Task.FromResult<IReadOnlyList<RollbackSessionSummary>>(sessions);
         }
 
         public Task<RollbackPlan> CreatePlanAsync(

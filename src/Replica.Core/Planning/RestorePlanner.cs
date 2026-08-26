@@ -129,7 +129,9 @@ public sealed class RestorePlanner : IRestorePlanner
             redactValues ? null : item.TargetValue,
             redactValues ? null : item.SourceValue,
             item.Risk,
-            item.RequiresAdministrator,
+            classification.Type is RestoreActionType.InstallPackage or RestoreActionType.UpdatePackage
+                ? false
+                : item.RequiresAdministrator,
             item.RequiresRestart,
             canRollback,
             [],

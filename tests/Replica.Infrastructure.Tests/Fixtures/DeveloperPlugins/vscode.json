@@ -4,7 +4,7 @@
     "VisualStudioCodeExtensions": "ms-dotnettools.csharp@2.80.0\nredhat.vscode-yaml@1.17.0"
   },
   "files": {
-    "{AppData}/Code/User/settings.json": "{\"editor.fontSize\":14,\"github.token\":\"TOP_SECRET\",\"nested\":{\"password\":\"TOP_SECRET\",\"safe\":true}}",
+    "{AppData}/Code/User/settings.json": "{\"editor.fontSize\":14,\"github.token\":\"TOP_SECRET\",\"auth\":\"OPAQUE_CREDENTIAL_48391\",\"nested\":{\"password\":\"TOP_SECRET\",\"safe\":true}}",
     "{AppData}/Code/User/keybindings.json": "[{\"key\":\"ctrl+k\",\"command\":\"workbench.action.files.save\"}]",
     "{AppData}/Code/User/tasks.json": "{\"version\":\"2.0.0\",\"tasks\":[]}",
     "{AppData}/Code/User/snippets/csharp.json": "{\"prop\":{\"prefix\":\"prop\",\"body\":[\"public int Value { get; set; }\"]}}",

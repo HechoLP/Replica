@@ -1,11 +1,8 @@
 name: Release
 
-run-name: Release ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+run-name: Release ${{ inputs.release_tag }}
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -17,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  group: release-${{ inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
-  package:
-    name: Validate, build, and package
+  build-windows:
+    name: Validate and build Windows without signing credentials
     runs-on: windows-latest
     timeout-minutes: 40
     outputs:
@@ -30,27 +27,37 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       file_version: ${{ steps.version.outputs.file_version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
-      artifact_name: replica-release-${{ steps.version.outputs.version }}
-
+      commit_sha: ${{ steps.version.outputs.commit_sha }}
+      prepared_app_artifact: replica-windows-prepared-${{ steps.version.outputs.version }}
+      inno_tool_artifact: replica-inno-tool-${{ steps.version.outputs.version }}
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: true
-
     steps:
       - name: Check out release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
-
-      - name: Validate tag and project version
+          ref: ${{ inputs.release_tag }}
+      - name: Validate tag and protected default-branch ancestry
         id: version
         shell: powershell
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -GitHubOutputPath $env:GITHUB_OUTPUT
-
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git check-ref-format --branch $env:DEFAULT_BRANCH
+          if ($LASTEXITCODE -ne 0) { throw 'The repository default branch name is invalid.' }
+          $ancestorRef = "refs/remotes/origin/$env:DEFAULT_BRANCH"
+          $refspec = "+refs/heads/$env:DEFAULT_BRANCH`:$ancestorRef"
+          git fetch --no-tags origin $refspec
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the protected default branch.' }
+          ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -RequiredAncestorRef $ancestorRef -GitHubOutputPath $env:GITHUB_OUTPUT
+          $tagCommit = (git rev-list -n 1 $env:RELEASE_TAG).Trim()
+          git merge-base --is-ancestor $tagCommit $ancestorRef
+          if ($LASTEXITCODE -ne 0) { throw 'The release tag is not reachable from the protected default branch.' }
+          "commit_sha=$tagCommit" >> $env:GITHUB_OUTPUT
       - name: Set up .NET 10
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -60,50 +67,66 @@ jobs:
             global.json
             Directory.Packages.props
             **/*.csproj
-
       - name: Restore
         run: dotnet restore Replica.sln
-
       - name: Verify formatting
         run: dotnet format Replica.sln --verify-no-changes --no-restore
-
       - name: Build Release
-        run: dotnet build Replica.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }} -p:FileVersion=${{ steps.version.outputs.file_version }} -p:AssemblyVersion=${{ steps.version.outputs.file_version }} -p:InformationalVersion=${{ steps.version.outputs.version }}
-
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_FILE_VERSION: ${{ steps.version.outputs.file_version }}
+          PUBLISHER_CERTIFICATE_SHA256: ${{ vars.REPLICA_WINDOWS_PUBLISHER_CERTIFICATE_SHA256 }}
+        run: |
+          $arguments = @('build', 'Replica.sln', '-c', 'Release', '--no-restore', "-p:Version=$env:RELEASE_VERSION", "-p:FileVersion=$env:RELEASE_FILE_VERSION", "-p:AssemblyVersion=$env:RELEASE_FILE_VERSION", "-p:InformationalVersion=$env:RELEASE_VERSION")
+          if (![string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { $arguments += "-p:ReplicaPublisherCertificateSha256=$env:PUBLISHER_CERTIFICATE_SHA256" }
+          & dotnet @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
       - name: Test
         run: dotnet test Replica.sln -c Release --no-build --logger "trx;LogFilePrefix=replica-release" --results-directory TestResults
-
       - name: Audit vulnerable packages
         run: dotnet list Replica.sln package --vulnerable --include-transitive --no-restore
-
-      - name: Install Inno Setup 6.7.1
-        run: choco install innosetup --version=6.7.1 --yes --no-progress
-
-      - name: Publish self-contained application and build installer
+      - name: Prepare self-contained Windows application without signing credentials
         shell: powershell
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: ./scripts/build-release.ps1 -Version $env:RELEASE_VERSION -SkipVerification
-
-      - name: Prepare canonical GitHub Release Assets
+          RELEASE_FILE_VERSION: ${{ steps.version.outputs.file_version }}
+          RELEASE_PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          PUBLISHER_CERTIFICATE_SHA256: ${{ vars.REPLICA_WINDOWS_PUBLISHER_CERTIFICATE_SHA256 }}
+        run: |
+          if ($env:RELEASE_PRERELEASE -ne 'true' -and $env:PUBLISHER_CERTIFICATE_SHA256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'A Stable release requires the public Windows publisher certificate SHA-256 variable.' }
+          $publishArguments = @('publish', 'src/Replica.App/Replica.App.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '--no-restore', '-o', 'artifacts/publish/win-x64', "-p:Version=$env:RELEASE_VERSION", "-p:FileVersion=$env:RELEASE_FILE_VERSION", "-p:AssemblyVersion=$env:RELEASE_FILE_VERSION", "-p:InformationalVersion=$env:RELEASE_VERSION", '-p:PublishSingleFile=true', '-p:PublishTrimmed=false', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:IncludeSourceRevisionInInformationalVersion=false')
+          if (![string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { $publishArguments += "-p:ReplicaPublisherCertificateSha256=$env:PUBLISHER_CERTIFICATE_SHA256" }
+          dotnet @publishArguments
+          if ($LASTEXITCODE -ne 0) { throw 'Credential-free Windows publish failed.' }
+          $executable = Resolve-Path 'artifacts/publish/win-x64/Replica.exe'
+          $publisherPin = if ([string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { '' } else { $env:PUBLISHER_CERTIFICATE_SHA256.ToUpperInvariant() }
+          $manifest = [ordered]@{ version = $env:RELEASE_VERSION; publisherCertificateSha256 = $publisherPin; replicaExeSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash }
+          [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $executable.Path) 'prepared-release.json'), ($manifest | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+      - name: Prepare Inno Setup 6.7.1 on the credential-free runner
         shell: powershell
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: ./scripts/prepare-release-assets.ps1 -Version $env:RELEASE_VERSION -ReleaseDirectory artifacts/release -OutputDirectory artifacts/release-package
-
-      - name: Upload release package
+        run: |
+          choco install innosetup --version=6.7.1 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          $source = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6'
+          if (!(Test-Path -LiteralPath (Join-Path $source 'ISCC.exe') -PathType Leaf)) { throw 'The Inno Setup compiler was not installed in the expected location.' }
+          Copy-Item -LiteralPath $source -Destination artifacts/inno-tool -Recurse
+      - name: Upload prepared Windows application
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: replica-release-${{ steps.version.outputs.version }}
-          path: |
-            artifacts/release-package/ReplicaSetup-${{ steps.version.outputs.version }}.exe
-            artifacts/release-package/ReplicaSetup-${{ steps.version.outputs.version }}.exe.sha256
-            artifacts/release-package/ReplicaSetup.exe
-            artifacts/release-package/ReplicaSetup.exe.sha256
+          name: replica-windows-prepared-${{ steps.version.outputs.version }}
+          path: artifacts/publish/win-x64
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
           compression-level: 0
-
+      - name: Upload reviewed Inno Setup tool
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: replica-inno-tool-${{ steps.version.outputs.version }}
+          path: artifacts/inno-tool
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
       - name: Upload release test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -113,36 +136,147 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  package-macos:
-    name: Package macOS (${{ matrix.architecture }})
+  package:
+    name: Sign and package Windows on an isolated runner
+    needs: build-windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: release-signing
+    outputs:
+      tag: ${{ needs.build-windows.outputs.tag }}
+      version: ${{ needs.build-windows.outputs.version }}
+      prerelease: ${{ needs.build-windows.outputs.prerelease }}
+      artifact_name: replica-release-${{ needs.build-windows.outputs.version }}
+      windows_signed: ${{ steps.signing.outputs.enabled }}
+    steps:
+      - name: Check out reviewed release scripts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.build-windows.outputs.commit_sha }}
+      - name: Download prepared Windows application
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.build-windows.outputs.prepared_app_artifact }}
+          path: artifacts/publish/win-x64
+      - name: Download reviewed Inno Setup tool
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.build-windows.outputs.inno_tool_artifact }}
+          path: artifacts/inno-tool
+      - name: Validate prepared inputs before exposing signing capability
+        id: prepared
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+          RELEASE_TAG: ${{ needs.build-windows.outputs.tag }}
+          PUBLISHER_CERTIFICATE_SHA256: ${{ vars.REPLICA_WINDOWS_PUBLISHER_CERTIFICATE_SHA256 }}
+          EXPECTED_INNO_TREE_SHA256: ${{ vars.REPLICA_INNO_SETUP_TOOL_TREE_SHA256 }}
+          EXPECTED_INNO_CERTIFICATE_SHA256: ${{ vars.REPLICA_INNO_SETUP_PUBLISHER_CERTIFICATE_SHA256 }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git check-ref-format --branch $env:DEFAULT_BRANCH
+          if ($LASTEXITCODE -ne 0) { throw 'The repository default branch name is invalid.' }
+          $ancestorRef = "refs/remotes/origin/$env:DEFAULT_BRANCH"
+          $refspec = "+refs/heads/$env:DEFAULT_BRANCH`:$ancestorRef"
+          git fetch --no-tags origin $refspec
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the protected default branch.' }
+          ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -RequiredAncestorRef $ancestorRef | Out-Null
+          if ($env:EXPECTED_INNO_TREE_SHA256 -notmatch '^[0-9A-Fa-f]{64}$' -or $env:EXPECTED_INNO_CERTIFICATE_SHA256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Pinned Inno Setup tree and publisher certificate SHA-256 variables are required.' }
+          $toolRoot = (Resolve-Path 'artifacts/inno-tool').Path
+          if (Get-ChildItem -LiteralPath $toolRoot -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }) { throw 'The prepared Inno Setup tool contains a reparse point.' }
+          $treeHash = (& ./scripts/get-directory-tree-sha256.ps1 -RootPath $toolRoot).Trim()
+          if (!$treeHash.Equals($env:EXPECTED_INNO_TREE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The Inno Setup tool tree does not match the reviewed public digest.' }
+          $iscc = Join-Path $toolRoot 'ISCC.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $iscc
+          if ($signature.Status -ne [Management.Automation.SignatureStatus]::Valid -or $null -eq $signature.SignerCertificate) { throw 'The reviewed Inno Setup compiler does not have a valid Authenticode signature.' }
+          $innoCertificateSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($signature.SignerCertificate.RawData))
+          if (!$innoCertificateSha256.Equals($env:EXPECTED_INNO_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The Inno Setup compiler signer does not match the reviewed public certificate pin.' }
+          $manifest = Get-Content -LiteralPath artifacts/publish/win-x64/prepared-release.json -Raw | ConvertFrom-Json
+          $expectedPublisher = if ([string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { '' } else { $env:PUBLISHER_CERTIFICATE_SHA256.ToUpperInvariant() }
+          $executableHash = (Get-FileHash -LiteralPath artifacts/publish/win-x64/Replica.exe -Algorithm SHA256).Hash
+          if ($manifest.version -ne $env:RELEASE_VERSION -or $manifest.publisherCertificateSha256 -ne $expectedPublisher -or $manifest.replicaExeSha256 -ne $executableHash) { throw 'The prepared Windows application failed isolated-runner digest validation.' }
+          "iscc_path=$iscc" >> $env:GITHUB_OUTPUT
+      - name: Configure protected Windows signing identity
+        id: signing
+        shell: powershell
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.REPLICA_WINDOWS_SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.REPLICA_WINDOWS_SIGNING_PFX_PASSWORD }}
+          RELEASE_PRERELEASE: ${{ needs.build-windows.outputs.prerelease }}
+          EXPECTED_CERTIFICATE_SHA256: ${{ vars.REPLICA_WINDOWS_PUBLISHER_CERTIFICATE_SHA256 }}
+        run: |
+          $hasCertificate = ![string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)
+          $hasPassword = ![string]::IsNullOrWhiteSpace($env:SIGNING_PFX_PASSWORD)
+          if ($hasCertificate -ne $hasPassword) { throw 'Both Windows signing secrets must be configured together.' }
+          if (!$hasCertificate) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires the protected Windows Authenticode signing identity.' }; 'enabled=false' >> $env:GITHUB_OUTPUT; exit 0 }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'replica-release-signing.pfx'
+          "REPLICA_SIGNING_PFX_PATH=$pfxPath" >> $env:GITHUB_ENV
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force)
+          if ($null -eq $certificate -or !$certificate.HasPrivateKey) { throw 'The protected Windows signing identity could not be imported with its private key.' }
+          "REPLICA_SIGNING_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+          $certificateSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($certificate.RawData))
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_CERTIFICATE_SHA256) -or !$certificateSha256.Equals($env:EXPECTED_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The protected signing identity does not match the public publisher certificate pin.' }
+          Remove-Item -LiteralPath $pfxPath -Force
+          'enabled=true' >> $env:GITHUB_OUTPUT
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "certificate_sha256=$certificateSha256" >> $env:GITHUB_OUTPUT
+      - name: Sign prepared application and build signed installer
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+          SIGNING_CERTIFICATE_THUMBPRINT: ${{ steps.signing.outputs.thumbprint }}
+          PUBLISHER_CERTIFICATE_SHA256: ${{ steps.signing.outputs.certificate_sha256 }}
+          ISCC_PATH: ${{ steps.prepared.outputs.iscc_path }}
+        run: |
+          $arguments = @{ Version = $env:RELEASE_VERSION; IsccPath = $env:ISCC_PATH; SkipVerification = $true; UsePreparedPublish = $true }
+          if (![string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_THUMBPRINT)) { $arguments.SigningCertificateThumbprint = $env:SIGNING_CERTIFICATE_THUMBPRINT; $arguments.PublisherCertificateSha256 = $env:PUBLISHER_CERTIFICATE_SHA256 }
+          ./scripts/build-release.ps1 @arguments
+      - name: Remove protected Windows signing identity and prove absence
+        if: always()
+        shell: powershell
+        run: |
+          if (![string]::IsNullOrWhiteSpace($env:REPLICA_SIGNING_CERTIFICATE_THUMBPRINT)) { $certificatePath = "Cert:\CurrentUser\My\$env:REPLICA_SIGNING_CERTIFICATE_THUMBPRINT"; if (Test-Path -LiteralPath $certificatePath) { Remove-Item -LiteralPath $certificatePath -Force }; if (Test-Path -LiteralPath $certificatePath) { throw 'The Windows signing identity remained installed after cleanup.' } }
+          if (![string]::IsNullOrWhiteSpace($env:REPLICA_SIGNING_PFX_PATH)) { if (Test-Path -LiteralPath $env:REPLICA_SIGNING_PFX_PATH -PathType Leaf) { Remove-Item -LiteralPath $env:REPLICA_SIGNING_PFX_PATH -Force }; if (Test-Path -LiteralPath $env:REPLICA_SIGNING_PFX_PATH) { throw 'The temporary Windows signing file remained after cleanup.' } }
+      - name: Prepare canonical GitHub Release Assets
+        shell: powershell
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+        run: ./scripts/prepare-release-assets.ps1 -Version $env:RELEASE_VERSION -ReleaseDirectory artifacts/release -OutputDirectory artifacts/release-package
+      - name: Upload release package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: replica-release-${{ needs.build-windows.outputs.version }}
+          path: |
+            artifacts/release-package/ReplicaSetup-${{ needs.build-windows.outputs.version }}.exe
+            artifacts/release-package/ReplicaSetup-${{ needs.build-windows.outputs.version }}.exe.sha256
+            artifacts/release-package/ReplicaSetup.exe
+            artifacts/release-package/ReplicaSetup.exe.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  build-macos:
+    name: Build macOS (${{ matrix.architecture }}) without signing credentials
+    needs: build-windows
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        architecture:
-          - arm64
-          - x64
-
+        architecture: [arm64, x64]
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: true
-
     steps:
       - name: Check out release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
-
-      - name: Validate tag and project version
-        id: version
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: ./scripts/validate-release-version.ps1 -Tag $env:RELEASE_TAG -RequireGitTag -GitHubOutputPath $env:GITHUB_OUTPUT
-
+          ref: ${{ needs.build-windows.outputs.commit_sha }}
       - name: Set up .NET 10
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -151,35 +285,144 @@ jobs:
           cache-dependency-path: |
             global.json
             Directory.Packages.props
-            src/Replica.Core/Replica.Core.csproj
-            src/Replica.Storage/Replica.Storage.csproj
-            src/Replica.Mac.Infrastructure/Replica.Mac.Infrastructure.csproj
-            src/Replica.Mac/Replica.Mac.csproj
-            tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
-
+            **/*.csproj
       - name: Restore macOS projects
         run: dotnet restore tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj
-
       - name: Build and test macOS projects
         shell: pwsh
         env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
         run: |
           dotnet build tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-restore -p:Version=$env:RELEASE_VERSION -p:InformationalVersion=$env:RELEASE_VERSION
           if ($LASTEXITCODE -ne 0) { throw 'macOS build failed.' }
           dotnet test tests/Replica.Mac.Tests/Replica.Mac.Tests.csproj -c Release --no-build
           if ($LASTEXITCODE -ne 0) { throw 'macOS tests failed.' }
-
-      - name: Create self-contained app bundle and DMG
+      - name: Prepare self-contained macOS application without signing credentials
         shell: pwsh
         env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: ./scripts/build-macos-release.ps1 -Version $env:RELEASE_VERSION -Architecture ${{ matrix.architecture }}
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+        run: |
+          $output = "artifacts/macos-${{ matrix.architecture }}/publish"
+          dotnet publish src/Replica.Mac/Replica.Mac.csproj -c Release -r "osx-${{ matrix.architecture }}" --self-contained true --no-restore -o $output -p:Version=$env:RELEASE_VERSION -p:InformationalVersion=$env:RELEASE_VERSION -p:PublishSingleFile=true -p:PublishTrimmed=false
+          if ($LASTEXITCODE -ne 0) { throw 'Credential-free macOS publish failed.' }
+          $executable = Resolve-Path (Join-Path $output 'Replica')
+          $manifest = [ordered]@{ version = $env:RELEASE_VERSION; architecture = '${{ matrix.architecture }}'; replicaExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash }
+          [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $executable.Path) 'prepared-release.json'), ($manifest | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+      - name: Upload prepared macOS application
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: replica-macos-prepared-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
+          path: artifacts/macos-${{ matrix.architecture }}/publish
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
 
+  package-macos:
+    name: Sign and notarize macOS (${{ matrix.architecture }}) on an isolated runner
+    needs: [build-windows, build-macos]
+    runs-on: macos-latest
+    timeout-minutes: 25
+    environment: release-signing
+    outputs:
+      macos_notarized: ${{ steps.apple-signing.outputs.enabled }}
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [arm64, x64]
+    steps:
+      - name: Check out reviewed release scripts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.build-windows.outputs.commit_sha }}
+      - name: Download prepared macOS application
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: replica-macos-prepared-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
+          path: artifacts/macos-${{ matrix.architecture }}/publish
+      - name: Validate prepared macOS input before exposing signing capability
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+        run: |
+          $output = "artifacts/macos-${{ matrix.architecture }}/publish"
+          if (Get-ChildItem -LiteralPath $output -Recurse -Force | Where-Object { $null -ne $_.LinkType }) { throw 'The prepared macOS application contains a symbolic link.' }
+          $manifest = Get-Content -LiteralPath (Join-Path $output 'prepared-release.json') -Raw | ConvertFrom-Json
+          $hash = (Get-FileHash -LiteralPath (Join-Path $output 'Replica') -Algorithm SHA256).Hash
+          if ($manifest.version -ne $env:RELEASE_VERSION -or $manifest.architecture -ne '${{ matrix.architecture }}' -or $manifest.replicaExecutableSha256 -ne $hash) { throw 'The prepared macOS application failed isolated-runner digest validation.' }
+      - name: Configure protected Apple signing and notarization identities
+        id: apple-signing
+        shell: pwsh
+        env:
+          APPLE_P12_BASE64: ${{ secrets.REPLICA_APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_P12_PASSWORD: ${{ secrets.REPLICA_APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.REPLICA_APPLE_NOTARY_KEY_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.REPLICA_APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.REPLICA_APPLE_NOTARY_ISSUER_ID }}
+          EXPECTED_APPLE_CERTIFICATE_SHA256: ${{ vars.REPLICA_APPLE_DEVELOPER_ID_CERTIFICATE_SHA256 }}
+          RELEASE_PRERELEASE: ${{ needs.build-windows.outputs.prerelease }}
+        run: |
+          $configured = @($env:APPLE_P12_BASE64, $env:APPLE_P12_PASSWORD, $env:APPLE_NOTARY_KEY_BASE64, $env:APPLE_NOTARY_KEY_ID, $env:APPLE_NOTARY_ISSUER_ID) | ForEach-Object { ![string]::IsNullOrWhiteSpace($_) }
+          if ($configured -contains $true -and $configured -contains $false) { throw 'All Apple Developer ID and notarization secrets must be configured together.' }
+          if ($configured -notcontains $true) { if ($env:RELEASE_PRERELEASE -ne 'true') { throw 'A Stable release requires Apple Developer ID signing and notarization credentials.' }; 'enabled=false' >> $env:GITHUB_OUTPUT; exit 0 }
+          if ($env:EXPECTED_APPLE_CERTIFICATE_SHA256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'A protected Apple identity requires the public Developer ID certificate SHA-256 variable.' }
+          $keychainPath = Join-Path $env:RUNNER_TEMP 'replica-release.keychain-db'
+          $p12Path = Join-Path $env:RUNNER_TEMP 'replica-developer-id.p12'
+          $notaryKeyPath = Join-Path $env:RUNNER_TEMP "AuthKey_$($env:APPLE_NOTARY_KEY_ID).p8"
+          $keychainPassword = [Guid]::NewGuid().ToString('N')
+          "REPLICA_APPLE_KEYCHAIN_PATH=$keychainPath" >> $env:GITHUB_ENV
+          "REPLICA_APPLE_P12_PATH=$p12Path" >> $env:GITHUB_ENV
+          "REPLICA_APPLE_NOTARY_KEY_PATH=$notaryKeyPath" >> $env:GITHUB_ENV
+          [IO.File]::WriteAllBytes($p12Path, [Convert]::FromBase64String($env:APPLE_P12_BASE64))
+          [IO.File]::WriteAllBytes($notaryKeyPath, [Convert]::FromBase64String($env:APPLE_NOTARY_KEY_BASE64))
+          & security create-keychain -p $keychainPassword $keychainPath
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the temporary signing keychain.' }
+          & security list-keychains -d user -s $keychainPath
+          if ($LASTEXITCODE -ne 0) { throw 'Could not add the temporary signing keychain to the user search list.' }
+          & security unlock-keychain -p $keychainPassword $keychainPath
+          if ($LASTEXITCODE -ne 0) { throw 'Could not unlock the temporary signing keychain.' }
+          & security set-keychain-settings -lut 900 $keychainPath
+          if ($LASTEXITCODE -ne 0) { throw 'Could not constrain the temporary signing keychain lifetime.' }
+          & security import $p12Path -k $keychainPath -P $env:APPLE_P12_PASSWORD -T /usr/bin/codesign -T /usr/bin/security
+          if ($LASTEXITCODE -ne 0) { throw 'Could not import the Developer ID identity.' }
+          Remove-Item -LiteralPath $p12Path -Force
+          & security set-key-partition-list -S apple-tool:,apple: -s -k $keychainPassword $keychainPath | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not authorize codesign to use the Developer ID identity.' }
+          $identityOutput = (& security find-identity -v -p codesigning $keychainPath) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $identityOutput -notmatch '"(?<identity>Developer ID Application: [^"]+)"') { throw 'A Developer ID Application identity was not found in the protected certificate.' }
+          $identity = $Matches.identity
+          $certificateOutput = (& security find-certificate -c $identity -Z $keychainPath) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $certificateOutput -notmatch 'SHA-256 hash:\s*(?<sha256>[0-9A-Fa-f]{64})' -or !$Matches.sha256.Equals($env:EXPECTED_APPLE_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The protected Developer ID identity does not match the public certificate pin.' }
+          $profile = 'ReplicaReleaseNotary'
+          & xcrun notarytool store-credentials $profile --key $notaryKeyPath --key-id $env:APPLE_NOTARY_KEY_ID --issuer $env:APPLE_NOTARY_ISSUER_ID --keychain $keychainPath
+          if ($LASTEXITCODE -ne 0) { throw 'Could not configure the temporary notarization profile.' }
+          Remove-Item -LiteralPath $notaryKeyPath -Force
+          'enabled=true' >> $env:GITHUB_OUTPUT
+          "identity=$identity" >> $env:GITHUB_OUTPUT
+          "profile=$profile" >> $env:GITHUB_OUTPUT
+          "keychain_path=$keychainPath" >> $env:GITHUB_OUTPUT
+      - name: Create signed app bundle and notarized DMG
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple-signing.outputs.identity }}
+          APPLE_NOTARY_PROFILE: ${{ steps.apple-signing.outputs.profile }}
+          APPLE_NOTARY_KEYCHAIN: ${{ steps.apple-signing.outputs.keychain_path }}
+        run: |
+          $arguments = @{ Version = $env:RELEASE_VERSION; Architecture = '${{ matrix.architecture }}'; UsePreparedPublish = $true }
+          if (![string]::IsNullOrWhiteSpace($env:APPLE_SIGNING_IDENTITY)) { $arguments.SigningIdentity = $env:APPLE_SIGNING_IDENTITY; $arguments.NotaryKeychainProfile = $env:APPLE_NOTARY_PROFILE; $arguments.NotaryKeychainPath = $env:APPLE_NOTARY_KEYCHAIN }
+          ./scripts/build-macos-release.ps1 @arguments
+      - name: Remove protected Apple signing material and prove absence
+        if: always()
+        shell: pwsh
+        run: |
+          if (![string]::IsNullOrWhiteSpace($env:REPLICA_APPLE_KEYCHAIN_PATH) -and (Test-Path -LiteralPath $env:REPLICA_APPLE_KEYCHAIN_PATH)) { & security lock-keychain $env:REPLICA_APPLE_KEYCHAIN_PATH; if ($LASTEXITCODE -ne 0) { throw 'Could not lock the temporary Apple signing keychain.' }; & security delete-keychain $env:REPLICA_APPLE_KEYCHAIN_PATH; if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $env:REPLICA_APPLE_KEYCHAIN_PATH)) { throw 'Could not prove deletion of the temporary Apple signing keychain.' } }
+          foreach ($path in @($env:REPLICA_APPLE_P12_PATH, $env:REPLICA_APPLE_NOTARY_KEY_PATH)) { if (![string]::IsNullOrWhiteSpace($path)) { if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }; if (Test-Path -LiteralPath $path) { throw 'Temporary Apple signing material remained after cleanup.' } } }
       - name: Upload macOS release package
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: replica-macos-${{ steps.version.outputs.version }}-${{ matrix.architecture }}
+          name: replica-macos-${{ needs.build-windows.outputs.version }}-${{ matrix.architecture }}
           path: |
             artifacts/macos-release/Replica-macOS-${{ matrix.architecture }}.dmg
             artifacts/macos-release/Replica-macOS-${{ matrix.architecture }}.dmg.sha256
@@ -190,9 +433,7 @@ jobs:
   attest:
     name: Attest installer provenance
     if: github.event.repository.visibility == 'public'
-    needs:
-      - package
-      - package-macos
+    needs: [package, package-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -200,21 +441,18 @@ jobs:
       actions: read
       id-token: write
       attestations: write
-
     steps:
       - name: Download release package
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
-
       - name: Download macOS release packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: replica-macos-${{ needs.package.outputs.version }}-*
           path: release-package
           merge-multiple: true
-
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
@@ -223,48 +461,32 @@ jobs:
   release:
     name: Publish GitHub Release
     if: always() && needs.package.result == 'success' && needs.package-macos.result == 'success' && (needs.attest.result == 'success' || needs.attest.result == 'skipped')
-    needs:
-      - package
-      - package-macos
-      - attest
+    needs: [package, package-macos, attest]
     runs-on: ubuntu-latest
+    environment: release-publishing
     timeout-minutes: 10
     permissions:
       actions: read
       contents: write
-
     steps:
       - name: Download verified release package
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ needs.package.outputs.artifact_name }}
           path: release-package
-
       - name: Download verified macOS packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: replica-macos-${{ needs.package.outputs.version }}-*
           path: release-package
           merge-multiple: true
-
-      - name: Verify installer SHA-256
+      - name: Verify release SHA-256 files
         shell: pwsh
         run: |
           $expected = (Get-Content -LiteralPath release-package/ReplicaSetup.exe.sha256 -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
           $actual = (Get-FileHash -LiteralPath release-package/ReplicaSetup.exe -Algorithm SHA256).Hash
-          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'ReplicaSetup.exe failed SHA-256 verification before publication.'
-          }
-          foreach ($architecture in @('arm64', 'x64')) {
-            $name = "Replica-macOS-$architecture.dmg"
-            $checksum = "release-package/$name.sha256"
-            $expected = (Get-Content -LiteralPath $checksum -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
-            $actual = (Get-FileHash -LiteralPath "release-package/$name" -Algorithm SHA256).Hash
-            if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
-              throw "$name failed SHA-256 verification before publication."
-            }
-          }
-
+          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'ReplicaSetup.exe failed SHA-256 verification before publication.' }
+          foreach ($architecture in @('arm64', 'x64')) { $name = "Replica-macOS-$architecture.dmg"; $expected = (Get-Content -LiteralPath "release-package/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]; $actual = (Get-FileHash -LiteralPath "release-package/$name" -Algorithm SHA256).Hash; if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw "$name failed SHA-256 verification before publication." } }
       - name: Create immutable GitHub Release
         shell: pwsh
         env:
@@ -272,24 +494,13 @@ jobs:
           RELEASE_TAG: ${{ needs.package.outputs.tag }}
           RELEASE_VERSION: ${{ needs.package.outputs.version }}
           RELEASE_PRERELEASE: ${{ needs.package.outputs.prerelease }}
+          WINDOWS_SIGNED: ${{ needs.package.outputs.windows_signed }}
+          MACOS_NOTARIZED: ${{ needs.package-macos.outputs.macos_notarized }}
         run: |
-          $arguments = @(
-            'release', 'create', $env:RELEASE_TAG,
-            '--repo', $env:GITHUB_REPOSITORY,
-            '--verify-tag',
-            '--title', "Replica $env:RELEASE_VERSION",
-            '--generate-notes',
-            '--notes', "> [!WARNING]`n> The Windows installer is **Unsigned**. The macOS apps are ad-hoc signed and **not notarized**. Verify the matching SHA-256 file before opening a download.",
-            'release-package/ReplicaSetup.exe',
-            'release-package/ReplicaSetup.exe.sha256',
-            'release-package/Replica-macOS-arm64.dmg',
-            'release-package/Replica-macOS-arm64.dmg.sha256',
-            'release-package/Replica-macOS-x64.dmg',
-            'release-package/Replica-macOS-x64.dmg.sha256')
-          if ($env:RELEASE_PRERELEASE -eq 'true') {
-            $arguments += '--prerelease'
-          }
+          $windowsTrust = if ($env:WINDOWS_SIGNED -eq 'true') { 'The Windows installer is Authenticode-signed.' } else { 'This prerelease Windows installer is **Unsigned**.' }
+          $macTrust = if ($env:MACOS_NOTARIZED -eq 'true') { 'The macOS apps are Developer ID signed and notarized.' } else { 'The prerelease macOS apps are ad-hoc signed and **not notarized**.' }
+          $trustNotice = "> [!NOTE]`n> $windowsTrust $macTrust Verify the matching SHA-256 file before opening a download."
+          $arguments = @('release', 'create', $env:RELEASE_TAG, '--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', "Replica $env:RELEASE_VERSION", '--generate-notes', '--notes', $trustNotice, 'release-package/ReplicaSetup.exe', 'release-package/ReplicaSetup.exe.sha256', 'release-package/Replica-macOS-arm64.dmg', 'release-package/Replica-macOS-arm64.dmg.sha256', 'release-package/Replica-macOS-x64.dmg', 'release-package/Replica-macOS-x64.dmg.sha256')
+          if ($env:RELEASE_PRERELEASE -eq 'true') { $arguments += '--prerelease' }
           & gh @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "GitHub Release creation failed with exit code $LASTEXITCODE."
-          }
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed with exit code $LASTEXITCODE." }

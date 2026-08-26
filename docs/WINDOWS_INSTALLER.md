@@ -39,7 +39,18 @@ Snapshot creation/opening is covered by snapshot round-trip tests and the file-a
 
 ## Signing
 
-Until a production Authenticode certificate is configured, setup is plainly marked **Unsigned** in its pre-install notice and metadata. The build never creates a test certificate or presents an unsigned package as signed. Verify the SHA-256 file before testing an unsigned installer.
+An unsigned local or permitted prerelease build is plainly marked **Unsigned** in its pre-install notice and metadata. The build never creates a test certificate or presents an invalid signature as unsigned-but-acceptable. Verify the SHA-256 file before testing such a package.
+
+For a production build, install a code-signing identity with an accessible private key in `Cert:\CurrentUser\My`, then pass its thumbprint. `build-release.ps1` derives the certificate's SHA-256, requires the update publisher allow-list to contain that exact certificate, signs `Replica.exe`, asks Inno Setup to sign setup and the generated uninstaller, timestamps every signature over HTTPS, and verifies the resulting signer before creating checksums:
+
+```powershell
+./scripts/build-release.ps1 `
+  -Version 1.0.0 `
+  -SigningCertificateThumbprint <thumbprint> `
+  -PublisherCertificateSha256 <64-hex-certificate-sha256>
+```
+
+The tagged GitHub workflow accepts the protected `REPLICA_WINDOWS_SIGNING_PFX_BASE64` and `REPLICA_WINDOWS_SIGNING_PFX_PASSWORD` secrets, removes the imported identity and PFX in an unconditional cleanup step, and refuses a Stable release when they are absent. Certificate renewal or rotation requires a reviewed publisher-pin transition; never replace the pin without also reviewing update compatibility and incident response.
 
 ## Release verification checklist
 

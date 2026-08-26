@@ -132,6 +132,25 @@ public sealed class ElevatedPlanStoreTests : IDisposable
         Assert.False(ElevatedExecutorArgumentsParser.TryParse([.. valid, "--unexpected"], out _));
     }
 
+    [Theory]
+    [InlineData(RestoreActionType.InstallPackage)]
+    [InlineData(RestoreActionType.UpdatePackage)]
+    [InlineData(RestoreActionType.RestoreFile)]
+    [InlineData(RestoreActionType.RestoreSelectedUserFile)]
+    public async Task CreateAsync_RejectsPackageAndFileActionsAtElevationBoundary(
+        RestoreActionType actionType)
+    {
+        ElevatedPlanStore store = CreateStore(TimeProvider.System);
+        FakeContext context = new("session-disallowed");
+        RestoreAction action = AdministratorAction("disallowed", actionType);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CreateAsync(
+            Plan(action),
+            action,
+            context,
+            CancellationToken.None));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
@@ -147,11 +166,13 @@ public sealed class ElevatedPlanStoreTests : IDisposable
         return new ElevatedPlanStore(new ReplicaPathProvider(_root), timeProvider);
     }
 
-    private static RestoreAction AdministratorAction(string id)
+    private static RestoreAction AdministratorAction(
+        string id,
+        RestoreActionType type = RestoreActionType.SetMachineEnvironmentVariable)
     {
         return new RestoreAction(
             id,
-            RestoreActionType.SetMachineEnvironmentVariable,
+            type,
             "Machine setting",
             "test",
             null,

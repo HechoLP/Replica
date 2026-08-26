@@ -15,16 +15,21 @@ public sealed class UpdateInstallerService : IUpdateInstallerService
     private readonly IFileHashService hashes;
     private readonly IReplicaPathProvider paths;
     private readonly IUpdateProcessLauncher processLauncher;
+    private readonly IUpdateInstallerTrustVerifier trustVerifier;
 
     public UpdateInstallerService(
         IReplicaPathProvider paths,
         IFileHashService hashes,
-        IUpdateProcessLauncher processLauncher)
+        IUpdateProcessLauncher processLauncher,
+        IUpdateInstallerTrustVerifier trustVerifier)
     {
         this.paths = paths;
         this.hashes = hashes;
         this.processLauncher = processLauncher;
+        this.trustVerifier = trustVerifier;
     }
+
+    public bool IsAutomaticInstallAvailable => trustVerifier.IsTrustPolicyConfigured;
 
     public async Task<UpdateInstallerLaunchResult> LaunchAsync(
         UpdateInstallerLaunchRequest request,
@@ -36,6 +41,13 @@ public sealed class UpdateInstallerService : IUpdateInstallerService
             throw new UpdateDownloadException(
                 UpdateDownloadErrorCode.ApprovalRequired,
                 "Installer launch requires explicit user approval.");
+        }
+
+        if (request.Download.ChecksumStatus != UpdateChecksumStatus.Verified)
+        {
+            throw new UpdateDownloadException(
+                UpdateDownloadErrorCode.ChecksumInvalid,
+                "Installer launch requires a published SHA-256 digest.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -74,6 +86,14 @@ public sealed class UpdateInstallerService : IUpdateInstallerService
             throw new UpdateDownloadException(
                 UpdateDownloadErrorCode.InvalidAsset,
                 "The downloaded installer changed immediately before launch.");
+        }
+
+
+        if (!await trustVerifier.VerifyAsync(installerPath, cancellationToken).ConfigureAwait(false))
+        {
+            throw new UpdateDownloadException(
+                UpdateDownloadErrorCode.SignatureInvalid,
+                "Installer launch requires a valid signature from a pinned Replica publisher.");
         }
 
         bool started = processLauncher.StartInstaller(installerPath);

@@ -15,4 +15,8 @@
     <Product>Replica</Product>
     <RepositoryUrl>https://github.com/HechoLP/Replica</RepositoryUrl>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(ReplicaPublisherCertificateSha256)' != ''">
+    <AssemblyMetadata Include="ReplicaPublisherCertificateSha256" Value="$(ReplicaPublisherCertificateSha256)" />
+  </ItemGroup>
 </Project>

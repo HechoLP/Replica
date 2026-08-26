@@ -39,7 +39,7 @@
                         <DataGridTextColumn Width="100" Header="관리자" Binding="{Binding Administrator}" IsReadOnly="True" />
                         <DataGridTextColumn Width="100" Header="재부팅" Binding="{Binding Restart}" IsReadOnly="True" />
                         <DataGridTextColumn Width="190" Header="권장 해결" Binding="{Binding Recommendation}" IsReadOnly="True" />
-                        <DataGridTextColumn Width="*" Header="Reason" Binding="{Binding Reason}" IsReadOnly="True" />
+                        <DataGridTextColumn Width="*" Header="판단 이유" Binding="{Binding Reason}" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
             </DockPanel>

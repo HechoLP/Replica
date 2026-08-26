@@ -93,6 +93,9 @@ public partial class App : Application
     {
         _exceptionHandler?.Handle(e.Exception, "WPF dispatcher");
         e.Handled = true;
+        Dispatcher.BeginInvoke(
+            () => Shutdown(-1),
+            DispatcherPriority.Send);
     }
 
     private void OnUnobservedTaskException(

@@ -1,6 +1,6 @@
 {
   "queries": {},
   "files": {
-    "{LocalAppData}/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json": "{\"defaultProfile\":\"{11111111-1111-1111-1111-111111111111}\",\"profiles\":{\"list\":[{\"guid\":\"{11111111-1111-1111-1111-111111111111}\",\"name\":\"PowerShell\",\"commandline\":\"C:/missing/pwsh.exe\",\"startingDirectory\":\"%USERPROFILE%\"}]},\"schemes\":[{\"name\":\"Replica Dark\",\"background\":\"#101010\"}],\"oauthToken\":\"TOP_SECRET\"}"
+    "{LocalAppData}/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json": "{\"defaultProfile\":\"{11111111-1111-1111-1111-111111111111}\",\"profiles\":{\"list\":[{\"guid\":\"{11111111-1111-1111-1111-111111111111}\",\"name\":\"PowerShell\",\"commandline\":\"C:/missing/pwsh.exe\",\"startingDirectory\":\"%USERPROFILE%\"}]},\"schemes\":[{\"name\":\"Replica Dark\",\"background\":\"#101010\"}],\"auth\":\"OPAQUE_CREDENTIAL_48391\",\"oauthToken\":\"TOP_SECRET\"}"
   }
 }

@@ -20,6 +20,18 @@
                 </Grid>
             </Border>
 
+            <Border Style="{DynamicResource PageCardStyle}">
+                <StackPanel>
+                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="20" FontWeight="SemiBold" Text="처음이라면 이 순서로 진행하세요" />
+                    <UniformGrid Columns="3" Margin="0,14,0,0">
+                        <StackPanel Margin="0,0,18,0"><TextBlock FontSize="22" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" Text="1" /><TextBlock FontWeight="SemiBold" Text="현재 PC 확인" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="변경 없이 프로그램과 설정을 읽습니다." TextWrapping="Wrap" /></StackPanel>
+                        <StackPanel Margin="0,0,18,0"><TextBlock FontSize="22" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" Text="2" /><TextBlock FontWeight="SemiBold" Text="Snapshot 만들기" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="포함 범위와 저장 위치를 직접 승인합니다." TextWrapping="Wrap" /></StackPanel>
+                        <StackPanel><TextBlock FontSize="22" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" Text="3" /><TextBlock FontWeight="SemiBold" Text="비교하고 복원" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="변경될 항목을 확인한 뒤 선택한 것만 복원합니다." TextWrapping="Wrap" /></StackPanel>
+                    </UniformGrid>
+                    <TextBlock Margin="0,14,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="취소해도 이미 완료된 변경과 롤백 기록은 보존됩니다. Replica가 자동으로 앱을 삭제하거나 PC를 재부팅하지 않습니다." TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <TextBlock Margin="0,4,0,12" AutomationProperties.HeadingLevel="Level2" FontSize="20" FontWeight="SemiBold" Text="Snapshot 만들기" />
             <UniformGrid Columns="3" Margin="0,0,0,8">
                 <Button Margin="0,0,10,10" Padding="18" HorizontalContentAlignment="Left" AutomationProperties.Name="Lightweight Snapshot 만들기" Command="{Binding CreateLightweightSnapshotCommand}">
@@ -29,7 +41,7 @@
                     <StackPanel><TextBlock FontWeight="SemiBold" Text="Recovery Snapshot" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="선택한 사용자 파일 포함" /></StackPanel>
                 </Button>
                 <Button Margin="0,0,0,10" Padding="18" HorizontalContentAlignment="Left" AutomationProperties.Name="Offline Recovery Pack 만들기" Command="{Binding CreateOfflineRecoveryPackCommand}">
-                    <StackPanel><TextBlock FontWeight="SemiBold" Text="Offline Recovery Pack" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="오프라인 복구 준비" /></StackPanel>
+                    <StackPanel><TextBlock FontWeight="SemiBold" Text="Offline Recovery Pack" /><TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="서명이 검증된 설치 자료 포함" /></StackPanel>
                 </Button>
             </UniformGrid>
 

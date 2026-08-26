@@ -24,7 +24,7 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Width="180" Header="작업" Binding="{Binding ActionId}" />
                             <DataGridTextColumn Width="110" Header="상태" Binding="{Binding State}" />
-                            <DataGridTextColumn Width="180" Header="Reason" Binding="{Binding Reason}" />
+                            <DataGridTextColumn Width="220" Header="결과 이유" Binding="{Binding Reason}" />
                             <DataGridTextColumn Width="*" Header="메시지" Binding="{Binding Message}" />
                             <DataGridTextColumn Width="100" Header="재부팅" Binding="{Binding Restart}" />
                         </DataGrid.Columns>

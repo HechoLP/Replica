@@ -72,6 +72,8 @@ public sealed class ReplicaInstallerDownloadService : IReplicaInstallerDownloadS
         string temporaryPath = Path.Combine(
             destinationDirectory,
             $".ReplicaSetup.{Guid.NewGuid():N}.download");
+        bool published = false;
+        bool completed = false;
         try
         {
             progress?.Report(new ReplicaInstallerDownloadProgress(
@@ -111,15 +113,29 @@ public sealed class ReplicaInstallerDownloadService : IReplicaInstallerDownloadS
             }
 
             File.Move(temporaryPath, destinationPath, overwrite: false);
+            published = true;
+            EnsureDestinationStillSafe(destinationDirectory);
+            EnsureTemporaryFileSafe(destinationPath, asset.Size);
+            string publishedHash = await hashes.ComputeSha256Async(destinationPath, cancellationToken)
+                .ConfigureAwait(false);
+            if (!publishedHash.Equals(hash, StringComparison.OrdinalIgnoreCase) ||
+                asset.Sha256 is not null &&
+                !asset.Sha256.Equals(publishedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ReplicaInstallerDownloadException(
+                    "ReplicaSetup.exe changed while it was being published.");
+            }
+
             progress?.Report(new ReplicaInstallerDownloadProgress(
                 ReplicaInstallerDownloadStage.Completed,
                 asset.Size,
                 asset.Size));
+            completed = true;
             return new ReplicaInstallerDownloadResult(
                 destinationPath,
                 release.TagName,
                 asset.Size,
-                hash,
+                publishedHash,
                 asset.Sha256 is not null,
                 release.ReleasePage);
         }
@@ -138,6 +154,7 @@ public sealed class ReplicaInstallerDownloadService : IReplicaInstallerDownloadS
         }
         finally
         {
+            bool cleanupSucceeded = true;
             try
             {
                 File.Delete(temporaryPath);
@@ -145,6 +162,24 @@ public sealed class ReplicaInstallerDownloadService : IReplicaInstallerDownloadS
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // Best-effort cleanup; the incomplete file never receives the installer name.
+            }
+
+            if (published && !completed)
+            {
+                try
+                {
+                    File.Delete(destinationPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    cleanupSucceeded = false;
+                }
+            }
+
+            if (!cleanupSucceeded)
+            {
+                throw new ReplicaInstallerDownloadException(
+                    "Installer verification failed and the unsafe published file could not be removed.");
             }
         }
     }

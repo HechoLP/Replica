@@ -35,11 +35,12 @@ public sealed class BuiltInDeveloperPluginTests
         Assert.Equal(plugin.Id, snapshot.PluginId);
         Assert.NotEmpty(snapshot.Exclusions);
         Assert.DoesNotContain("TOP_SECRET", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("OPAQUE_CREDENTIAL_48391", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("_authToken", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task VisualStudioCode_CapturesSupportedFilesAndVersionedExtensions()
+    public async Task VisualStudioCode_CapturesOnlyAllowListedPreferencesAndVersionedExtensions()
     {
         FixtureDeveloperPluginHost host = FixtureDeveloperPluginHost.Load("vscode");
         VisualStudioCodePlugin plugin = new();
@@ -50,7 +51,12 @@ public sealed class BuiltInDeveloperPluginTests
 
         Assert.Equal("2.80.0", snapshot.Values["extension:ms-dotnettools.csharp"]);
         Assert.Contains(snapshot.Files, file => file.LogicalPath == "settings.json");
-        Assert.Contains(snapshot.Files, file => file.LogicalPath == "snippets/csharp.json");
+        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath == "keybindings.json");
+        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath == "tasks.json");
+        Assert.Contains("editor.fontSize", Assert.Single(snapshot.Files).Content, StringComparison.Ordinal);
+        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath.StartsWith(
+            "snippets/",
+            StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(snapshot.Files, file =>
             file.LogicalPath.Contains("workspaceStorage", StringComparison.OrdinalIgnoreCase));
     }
@@ -75,7 +81,7 @@ public sealed class BuiltInDeveloperPluginTests
     }
 
     [Fact]
-    public async Task PowerShell_CapturesProfileAndModulesWithoutPolicyOrRepositoryActions()
+    public async Task PowerShell_CapturesModulesButNeverProfileScriptBodies()
     {
         FixtureDeveloperPluginHost host = FixtureDeveloperPluginHost.Load("powershell");
         PowerShellPlugin plugin = new();
@@ -93,15 +99,37 @@ public sealed class BuiltInDeveloperPluginTests
             CancellationToken.None);
 
         Assert.Equal("5.7.1", snapshot.Values["powershell-module:Pester"]);
-        Assert.Contains(snapshot.Files, file => file.Content.Contains(
-            "Import-Module Pester",
-            StringComparison.Ordinal));
+        Assert.Empty(snapshot.Files);
+        Assert.Contains(snapshot.Exclusions, exclusion => exclusion.ReasonCode == "ArbitraryCode");
         Assert.DoesNotContain(actions, action => action.Name.Contains(
             "ExecutionPolicy",
             StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(actions, action => action.Name.Contains(
             "repository",
             StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void JsonProjectionIncludesOnlyExplicitlyAllowListedKeysAndValueTypes()
+    {
+        const string json = """
+            {
+              "apiKey": "TOP_SECRET",
+              "api_key": "TOP_SECRET",
+              "accessKey": "TOP_SECRET",
+              "auth": "OPAQUE_CREDENTIAL_48391",
+              "safeText": "unapproved",
+              "safe": true
+            }
+            """;
+        string projectedJson = SanitizerProbe.ProjectJsonForTest(json)!;
+
+        Assert.DoesNotContain("TOP_SECRET", projectedJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("OPAQUE_CREDENTIAL_48391", projectedJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("apiKey", projectedJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("auth", projectedJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("safeText", projectedJson, StringComparison.Ordinal);
+        Assert.Contains("\"safe\": true", projectedJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -449,5 +477,27 @@ public sealed class BuiltInDeveloperPluginTests
 
         private static string Normalize(string value) =>
             value.Replace('\\', '/').TrimEnd('/');
+    }
+
+    private sealed class SanitizerProbe : BuiltInDeveloperPluginBase
+    {
+        public override string Id => "test.sanitizer";
+
+        public override string DisplayName => "Sanitizer";
+
+        public static string? ProjectJsonForTest(string value) => ProjectAllowListedJson(
+            value,
+            new Dictionary<string, Func<JsonElement, bool>>(StringComparer.Ordinal)
+            {
+                ["safe"] = IsJsonBoolean,
+            });
+
+        public override Task<PluginSnapshot> CaptureAsync(
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public override Task<IReadOnlyList<PluginSensitiveExclusion>> GetSensitiveExclusionsAsync(
+            PluginCaptureContext context,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

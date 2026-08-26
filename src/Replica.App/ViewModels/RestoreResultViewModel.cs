@@ -47,7 +47,7 @@ public sealed partial class RestoreResultViewModel : ObservableObject
         Items = result.Actions.Select(action => new RestoreResultRowViewModel(
             action.ActionId,
             GetStateName(action.State),
-            action.ReasonCode,
+            ReasonCodePresenter.GetText(action.ReasonCode),
             action.Message,
             action.RequiresRestart ? "필요" : "불필요")).ToArray();
         StatusText = result.WasCancelled

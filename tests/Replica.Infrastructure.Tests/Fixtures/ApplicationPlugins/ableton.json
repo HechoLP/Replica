@@ -4,7 +4,7 @@
   "version": "12.1.5",
   "running": false,
   "files": {
-    "{AppData}/Ableton/Live 12.1.5/Preferences/Preferences.cfg": "UserLibraryPath=C:\\\\Music\\\\Ableton User Library\nTemplatePath=C:\\\\Music\\\\Templates\nVST3Path=C:\\\\VST3\nLicenseToken=TOP_SECRET\n",
+    "{AppData}/Ableton/Live 12.1.5/Preferences/Preferences.cfg": "UserLibraryPath=C:\\\\Music\\\\Ableton User Library\nTemplatePath=C:\\\\Music\\\\Templates\nVST3Path=C:\\\\VST3\nAuth=OPAQUE_CREDENTIAL_48391\nLicenseToken=TOP_SECRET\n",
     "{AppData}/Ableton/Live 12.1.5/Preferences/Library.cfg": "LibraryPath=C:\\\\Music\\\\Ableton User Library\n",
     "{AppData}/Ableton/Live 12.1.5/Preferences/Options.txt": "-EnableArmOnSelection\n",
     "{AppData}/Ableton/Live 12.1.5/Projects/Secret Project/Secret.als": "TOP_SECRET",

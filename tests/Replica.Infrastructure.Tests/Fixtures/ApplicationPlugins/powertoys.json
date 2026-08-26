@@ -4,7 +4,7 @@
   "version": "0.90.1",
   "running": false,
   "files": {
-    "{LocalAppData}/Microsoft/PowerToys/settings.json": "{\"startup\":true,\"theme\":\"dark\",\"apiToken\":\"TOP_SECRET\"}",
+    "{LocalAppData}/Microsoft/PowerToys/settings.json": "{\"startup\":true,\"theme\":\"dark\",\"auth\":\"OPAQUE_CREDENTIAL_48391\",\"apiToken\":\"TOP_SECRET\"}",
     "{LocalAppData}/Microsoft/PowerToys/FancyZones/settings.json": "{\"fancyzones_shiftDrag\":true}",
     "{LocalAppData}/Microsoft/PowerToys/FancyZones/custom-layouts.json": "{\"custom-layouts\":[]}",
     "{LocalAppData}/Microsoft/PowerToys/FancyZones/app-zone-history.json": "{\"app-zone-history\":[]}",
