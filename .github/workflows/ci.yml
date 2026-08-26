@@ -70,9 +70,13 @@ jobs:
           retention-days: 7
 
   macos-build-and-test:
-    name: macOS build and test
+    name: macOS ${{ matrix.architecture }} build and test
     runs-on: macos-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [arm64, x64]
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -116,34 +120,27 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($version)) { throw 'Project version is unavailable.' }
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Build and verify Apple Silicon DMG
+      - name: Build and verify architecture-specific DMG
         shell: pwsh
-        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture arm64 -OutputDirectory artifacts/macos-release/arm64
-
-      - name: Build and verify Intel DMG
-        shell: pwsh
-        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture x64 -OutputDirectory artifacts/macos-release/x64
+        run: ./scripts/build-macos-release.ps1 -Version ${{ steps.project-version.outputs.version }} -Architecture ${{ matrix.architecture }} -OutputDirectory artifacts/macos-release/${{ matrix.architecture }}
 
       - name: Verify macOS package checksums
         shell: pwsh
         run: |
-          foreach ($architecture in @('arm64', 'x64')) {
-            $name = "Replica-macOS-$architecture.dmg"
-            $directory = "artifacts/macos-release/$architecture"
-            $expected = (Get-Content -LiteralPath "$directory/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
-            $actual = (Get-FileHash -LiteralPath "$directory/$name" -Algorithm SHA256).Hash
-            if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw "macOS $architecture CI package hash mismatch." }
-          }
+          $architecture = '${{ matrix.architecture }}'
+          $name = "Replica-macOS-$architecture.dmg"
+          $directory = "artifacts/macos-release/$architecture"
+          $expected = (Get-Content -LiteralPath "$directory/$name.sha256" -Raw).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]
+          $actual = (Get-FileHash -LiteralPath "$directory/$name" -Algorithm SHA256).Hash
+          if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw "macOS $architecture CI package hash mismatch." }
 
       - name: Upload verified macOS packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: macos-ci-packages
+          name: macos-ci-package-${{ matrix.architecture }}
           path: |
-            artifacts/macos-release/arm64/Replica-macOS-arm64.dmg
-            artifacts/macos-release/arm64/Replica-macOS-arm64.dmg.sha256
-            artifacts/macos-release/x64/Replica-macOS-x64.dmg
-            artifacts/macos-release/x64/Replica-macOS-x64.dmg.sha256
+            artifacts/macos-release/${{ matrix.architecture }}/Replica-macOS-${{ matrix.architecture }}.dmg
+            artifacts/macos-release/${{ matrix.architecture }}/Replica-macOS-${{ matrix.architecture }}.dmg.sha256
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
@@ -152,7 +149,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: macos-test-results
+          name: macos-test-results-${{ matrix.architecture }}
           path: TestResults/**/*.trx
           if-no-files-found: warn
           retention-days: 7

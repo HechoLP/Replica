@@ -178,6 +178,19 @@ public sealed partial class ReleaseAutomationContractTests
     }
 
     [Fact]
+    public void ContinuousIntegration_IsolatesMacOsArchitecturesOnSeparateRunners()
+    {
+        string workflow = File.ReadAllText(RepositoryFile(".github", "workflows", "ci.yml"));
+
+        Assert.Contains("architecture: [arm64, x64]", workflow, StringComparison.Ordinal);
+        Assert.Contains("macOS ${{ matrix.architecture }} build and test", workflow, StringComparison.Ordinal);
+        Assert.Contains("-Architecture ${{ matrix.architecture }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("macos-ci-package-${{ matrix.architecture }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("macos-test-results-${{ matrix.architecture }}", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("foreach ($architecture in @('arm64', 'x64'))", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InstallerSandbox_IsOfflineReadOnlyAndRunsTheFixedInstallerSmokeTest()
     {
         string sandbox = File.ReadAllText(RepositoryFile("scripts", "test-installer-sandbox.ps1"));
