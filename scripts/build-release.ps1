@@ -2,7 +2,7 @@
 param(
     [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string] $Version = '0.2.0-alpha.2',
+    [string] $Version = '0.2.0-alpha.3',
 
     [Parameter()]
     [string] $DotNetPath,
@@ -90,8 +90,13 @@ function Get-CertificateSha256 {
         [Security.Cryptography.X509Certificates.X509Certificate2] $Certificate
     )
 
-    return [Convert]::ToHexString(
-        [Security.Cryptography.SHA256]::HashData($Certificate.RawData))
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($sha256.ComputeHash($Certificate.RawData) | ForEach-Object { $_.ToString('X2') })
+    }
+    finally {
+        $sha256.Dispose()
+    }
 }
 
 function Find-SignTool {

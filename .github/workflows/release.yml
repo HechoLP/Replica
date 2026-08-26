@@ -191,7 +191,9 @@ jobs:
           $iscc = Join-Path $toolRoot 'ISCC.exe'
           $signature = Get-AuthenticodeSignature -LiteralPath $iscc
           if ($signature.Status -ne [Management.Automation.SignatureStatus]::Valid -or $null -eq $signature.SignerCertificate) { throw 'The reviewed Inno Setup compiler does not have a valid Authenticode signature.' }
-          $innoCertificateSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($signature.SignerCertificate.RawData))
+          $certificateHasher = [Security.Cryptography.SHA256]::Create()
+          try { $innoCertificateSha256 = -join ($certificateHasher.ComputeHash($signature.SignerCertificate.RawData) | ForEach-Object { $_.ToString('X2') }) }
+          finally { $certificateHasher.Dispose() }
           if (!$innoCertificateSha256.Equals($env:EXPECTED_INNO_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The Inno Setup compiler signer does not match the reviewed public certificate pin.' }
           $manifest = Get-Content -LiteralPath artifacts/publish/win-x64/prepared-release.json -Raw | ConvertFrom-Json
           $expectedPublisher = if ([string]::IsNullOrWhiteSpace($env:PUBLISHER_CERTIFICATE_SHA256)) { '' } else { $env:PUBLISHER_CERTIFICATE_SHA256.ToUpperInvariant() }
@@ -217,7 +219,9 @@ jobs:
           $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force)
           if ($null -eq $certificate -or !$certificate.HasPrivateKey) { throw 'The protected Windows signing identity could not be imported with its private key.' }
           [IO.File]::AppendAllText($env:GITHUB_ENV, "REPLICA_SIGNING_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)`n", [Text.UTF8Encoding]::new($false))
-          $certificateSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($certificate.RawData))
+          $certificateHasher = [Security.Cryptography.SHA256]::Create()
+          try { $certificateSha256 = -join ($certificateHasher.ComputeHash($certificate.RawData) | ForEach-Object { $_.ToString('X2') }) }
+          finally { $certificateHasher.Dispose() }
           if ([string]::IsNullOrWhiteSpace($env:EXPECTED_CERTIFICATE_SHA256) -or !$certificateSha256.Equals($env:EXPECTED_CERTIFICATE_SHA256, [StringComparison]::OrdinalIgnoreCase)) { throw 'The protected signing identity does not match the public publisher certificate pin.' }
           Remove-Item -LiteralPath $pfxPath -Force
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enabled=true`n", [Text.UTF8Encoding]::new($false))

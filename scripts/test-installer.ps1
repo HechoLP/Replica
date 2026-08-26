@@ -56,8 +56,13 @@ if (![string]::IsNullOrWhiteSpace($ExpectedSignerCertificateSha256)) {
         $null -eq $signature.SignerCertificate) {
         throw "Expected a valid Authenticode signature, but found $($signature.Status)."
     }
-    $actualSignerSha256 = [Convert]::ToHexString(
-        [Security.Cryptography.SHA256]::HashData($signature.SignerCertificate.RawData))
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $actualSignerSha256 = -join ($sha256.ComputeHash($signature.SignerCertificate.RawData) | ForEach-Object { $_.ToString('X2') })
+    }
+    finally {
+        $sha256.Dispose()
+    }
     if (!$actualSignerSha256.Equals($ExpectedSignerCertificateSha256, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Installer signer certificate did not match the pinned publisher policy.'
     }

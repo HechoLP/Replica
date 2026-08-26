@@ -7,7 +7,7 @@ Replica is distributed as one user download, `ReplicaSetup.exe`, through the off
 Prerequisites are the .NET 10 SDK and Inno Setup 6. From the repository root:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.2.0-alpha.2
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.2.0-alpha.3
 ```
 
 The script cleans only release directories below `artifacts`, restores, verifies formatting, builds, tests, publishes a self-contained single-file `win-x64` WPF executable, compiles the installer, validates its contract, and writes SHA-256 material. The only release outputs are:
@@ -23,7 +23,7 @@ Pass `-RunInstallTests` only on a clean Windows test account or disposable VM. T
 When Windows Sandbox is enabled, the same smoke test can be run without changing the host installation:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-sandbox.ps1 -Version 0.2.0-alpha.2
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer-sandbox.ps1 -Version 0.2.0-alpha.3
 ```
 
 The Sandbox runner disables networking and clipboard redirection, maps the repository read-only, writes only generated evidence beneath `artifacts/sandbox-installer-test`, and shuts down the disposable Sandbox after the test. It validates installation, launch, `.replica` association, same-version upgrade, uninstall, displayed product version, and default user-data retention.

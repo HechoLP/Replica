@@ -87,6 +87,7 @@ try {
     $windowsBuild = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\build-release.ps1') -Raw
     $windowsTest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\test-installer.ps1') -Raw
     $macBuild = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\build-macos-release.ps1') -Raw
+    $treeDigest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\get-directory-tree-sha256.ps1') -Raw
     $installer = Get-Content -LiteralPath (Join-Path $repositoryRoot 'installer\Replica.iss') -Raw
     $releaseContracts = @{
         'release workflow Windows stable signing gate' = @($workflow, 'A Stable release requires the protected Windows Authenticode signing identity.')
@@ -95,6 +96,7 @@ try {
         'release signing credentials are isolated on fresh runners' = @($workflow, 'Sign and package Windows on an isolated runner', 'Sign and notarize macOS (${{ matrix.architecture }}) on an isolated runner', 'Prepare self-contained Windows application without signing credentials', 'Prepare self-contained macOS application without signing credentials', 'UsePreparedPublish = $true', 'prepared-release.json', 'replicaExeSha256', 'replicaExecutableSha256')
         'release workflow secret cleanup proves absence' = @($workflow, 'REPLICA_SIGNING_CERTIFICATE_THUMBPRINT', 'REPLICA_SIGNING_PFX_PATH', 'REPLICA_APPLE_KEYCHAIN_PATH', 'prove absence', 'remained after cleanup')
         'Inno compiler artifact is authenticated before signing' = @($workflow, 'REPLICA_INNO_SETUP_TOOL_TREE_SHA256', 'REPLICA_INNO_SETUP_PUBLISHER_CERTIFICATE_SHA256', 'get-directory-tree-sha256.ps1', 'Inno Setup tool tree does not match', 'before exposing signing capability')
+        'Inno tree digest supports Windows PowerShell 5.1' = @($treeDigest, 'Substring($rootPrefix.Length)', '[Security.Cryptography.SHA256]::Create()', 'ComputeHash($bytes)')
         'Windows publisher certificate binding' = @($windowsBuild, 'ReplicaPublisherCertificateSha256', 'Get-CertificateSha256', 'UsePreparedPublish', 'prepared-release.json', 'reviewed digest manifest')
         'Windows installer signer verification' = @($windowsTest, 'ExpectedSignerCertificateSha256')
         'Inno Setup executable and uninstaller signing' = @($installer, 'SignTool=replica', 'SignedUninstaller=yes')
@@ -116,6 +118,13 @@ try {
     if ($workflow.IndexOf('[IO.File]::AppendAllText($env:GITHUB_OUTPUT', [StringComparison]::Ordinal) -lt 0 -or
         $workflow.IndexOf('[Text.UTF8Encoding]::new($false)', [StringComparison]::Ordinal) -lt 0) {
         throw 'Release workflow does not use explicit BOM-less UTF-8 GitHub output writes.'
+    }
+
+    $windowsPowerShellReleaseContent = @($workflow, $treeDigest, $windowsBuild, $windowsTest) -join "`n"
+    foreach ($unsupportedMarker in @('[IO.Path]::GetRelativePath(', '[Convert]::ToHexString(', '[Security.Cryptography.SHA256]::HashData(')) {
+        if ($windowsPowerShellReleaseContent.IndexOf($unsupportedMarker, [StringComparison]::Ordinal) -ge 0) {
+            throw "Windows PowerShell 5.1 release code uses unsupported API '$unsupportedMarker'."
+        }
     }
 
     Write-Host 'Release version, trust, prerelease, and workflow syntax checks passed.'
