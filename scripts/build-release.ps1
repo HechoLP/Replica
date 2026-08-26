@@ -2,7 +2,7 @@
 param(
     [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string] $Version = '0.1.0-alpha.1',
+    [string] $Version = '0.2.0-alpha.2',
 
     [Parameter()]
     [string] $DotNetPath,

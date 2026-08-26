@@ -4,16 +4,21 @@ All notable changes to Replica are documented in this file. The project follows 
 
 ## [Unreleased]
 
+## [0.2.0-alpha.2] - 2026-08-26
+
 ### Added
 
 - Windows Snapshot opening now validates the archive, scans the current PC read-only, displays the Diff, and builds a typed plan from the user's selected rows and restore mode.
 - Finder `.replica` document opening now enters the same validated macOS inspection path as the file picker.
+- Windows can author complete Offline Recovery Packs, inspect trust and snapshot binding before use, and export them through a bounded staging flow.
+- The recovery experience now includes clearer first-run guidance, task-oriented navigation, human-readable plans, empty states, and explicit Preview-versus-execution messaging.
 
 ### Changed
 
 - Built-in Windows plugins now run detection and capture during scanning; actual allow-listed values, compact files, exclusions, and partial failures are preserved in Snapshots.
 - macOS application discovery now handles bounded nested/system bundles, binary property lists, and thin Mach-O architecture metadata.
 - Pull-request CI now builds and verifies both macOS architectures, including exact Mach-O/Info.plist contracts and DMG read-back.
+- Release packaging isolates each macOS architecture on a separate runner and reserves deterministic DMG headroom.
 
 ### Security
 
@@ -22,6 +27,15 @@ All notable changes to Replica are documented in this file. The project follows 
 - GitHub Release lookup on macOS now validates response shape, prerelease consistency, limits, and exact official Release paths.
 - Recovery review now displays every typed action and maps selected files beneath safe user-owned defaults instead of trusting source paths.
 - Restore planning now stops when a required current-PC inventory stage is incomplete, rejects rewritten sensitive environment entries, and invalidates stale approvals whenever the Snapshot or Diff selection changes.
+- Hostile archives, private staging, elevated execution, rollback journaling, installer/update trust, and built-in plugin privacy boundaries were hardened and regression-tested.
+- Release jobs authenticate prepared artifacts and packaging tools before protected signing material is exposed.
+
+### Known issues
+
+- This Alpha remains unsigned on Windows and ad-hoc signed but not notarized on macOS because production signing identities are not configured.
+- macOS remains a read-only Preview and does not execute recovery operations.
+- Clean Windows 11 recovery/rollback and representative Apple Silicon/Intel interactive validation remain required before Stable.
+- No project license has been selected; public source availability is not an open-source license grant.
 
 ## [0.2.0-alpha.1] - 2026-08-12
 

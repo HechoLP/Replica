@@ -1,5 +1,5 @@
 #ifndef ReplicaVersion
-  #define ReplicaVersion "0.1.0-alpha.1"
+  #define ReplicaVersion "0.2.0-alpha.2"
 #endif
 
 #ifndef ReplicaFileVersion
