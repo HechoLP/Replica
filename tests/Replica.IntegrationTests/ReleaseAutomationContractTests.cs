@@ -169,6 +169,8 @@ public sealed partial class ReleaseAutomationContractTests
         Assert.Contains("UsePreparedPublish", macAssets, StringComparison.Ordinal);
         Assert.Contains("prepared-release.json", macAssets, StringComparison.Ordinal);
         Assert.Contains("reviewed digest manifest", macAssets, StringComparison.Ordinal);
+        Assert.Contains("$dmgHeadroomBytes", macAssets, StringComparison.Ordinal);
+        Assert.Contains("-megabytes $dmgMegabytes", macAssets, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", macAssets, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-Expression", validator, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Invoke-Expression", assets, StringComparison.OrdinalIgnoreCase);

@@ -226,7 +226,21 @@ if ($LASTEXITCODE -ne 0) {
 
 $dmgName = "Replica-macOS-$Architecture.dmg"
 $dmgPath = Join-Path $resolvedOutput $dmgName
-& hdiutil create -volname 'Replica' -srcfolder $bundleRoot -ov -format UDZO $dmgPath
+$bundleBytes = [long](
+    (Get-ChildItem -LiteralPath $bundleRoot -Recurse -Force -File |
+        Measure-Object -Property Length -Sum).Sum)
+$dmgHeadroomBytes = [Math]::Max(
+    64MB,
+    [long][Math]::Ceiling($bundleBytes * 0.25))
+$dmgMegabytes = [int][Math]::Ceiling(
+    [Math]::Max(256MB, $bundleBytes + $dmgHeadroomBytes) / 1MB)
+& hdiutil create `
+    -volname 'Replica' `
+    -srcfolder $bundleRoot `
+    -megabytes $dmgMegabytes `
+    -ov `
+    -format UDZO `
+    $dmgPath
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $dmgPath -PathType Leaf)) {
     throw 'DMG creation failed.'
 }
