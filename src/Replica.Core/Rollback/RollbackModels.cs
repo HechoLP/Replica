@@ -93,7 +93,10 @@ public sealed record RollbackPreviewItem(
     bool CanRollbackAutomatically,
     bool RequiresAdministrator,
     bool IsSelected,
-    string? ManualInstruction);
+    string? ManualInstruction,
+    string Target = "",
+    string Effect = "",
+    string? ExpectedCurrentSha256 = null);
 
 public sealed record RollbackPlan(
     string SessionId,

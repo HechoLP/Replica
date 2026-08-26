@@ -26,7 +26,7 @@ public sealed class UpdateInstallerServiceTests : IDisposable
         ReplicaPathProvider paths = new(root);
         UpdateDownloadResult download = await CreateDownloadAsync(paths);
         FakeProcessLauncher launcher = new();
-        UpdateInstallerService service = new(paths, new FileHashService(), launcher);
+        UpdateInstallerService service = new(paths, new FileHashService(), launcher, TrustedVerifier());
 
         UpdateInstallerLaunchResult result = await service.LaunchAsync(
             new UpdateInstallerLaunchRequest(download, UserApproved: true),
@@ -43,7 +43,7 @@ public sealed class UpdateInstallerServiceTests : IDisposable
         UpdateDownloadResult download = await CreateDownloadAsync(paths);
         await File.WriteAllTextAsync(download.InstallerPath, "tampered");
         FakeProcessLauncher launcher = new();
-        UpdateInstallerService service = new(paths, new FileHashService(), launcher);
+        UpdateInstallerService service = new(paths, new FileHashService(), launcher, TrustedVerifier());
 
         await Assert.ThrowsAsync<UpdateDownloadException>(() => service.LaunchAsync(
             new UpdateInstallerLaunchRequest(download, UserApproved: true),
@@ -59,7 +59,7 @@ public sealed class UpdateInstallerServiceTests : IDisposable
         UpdateDownloadResult download = await CreateDownloadAsync(paths);
         FakeProcessLauncher launcher = new();
         RaceAttemptingHashService hashes = new(download.InstallerPath);
-        UpdateInstallerService service = new(paths, hashes, launcher);
+        UpdateInstallerService service = new(paths, hashes, launcher, TrustedVerifier());
 
         UpdateInstallerLaunchResult result = await service.LaunchAsync(
             new UpdateInstallerLaunchRequest(download, UserApproved: true),
@@ -76,7 +76,7 @@ public sealed class UpdateInstallerServiceTests : IDisposable
         ReplicaPathProvider paths = new(root);
         UpdateDownloadResult download = await CreateDownloadAsync(paths);
         FakeProcessLauncher launcher = new();
-        UpdateInstallerService service = new(paths, new FileHashService(), launcher);
+        UpdateInstallerService service = new(paths, new FileHashService(), launcher, TrustedVerifier());
 
         UpdateDownloadException exception = await Assert.ThrowsAsync<UpdateDownloadException>(() =>
             service.LaunchAsync(
@@ -84,6 +84,28 @@ public sealed class UpdateInstallerServiceTests : IDisposable
                 CancellationToken.None));
 
         Assert.Equal(UpdateDownloadErrorCode.ApprovalRequired, exception.Code);
+        Assert.Null(launcher.StartedPath);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_BlocksWhenPublisherTrustIsUnavailable()
+    {
+        ReplicaPathProvider paths = new(root);
+        UpdateDownloadResult download = await CreateDownloadAsync(paths);
+        FakeProcessLauncher launcher = new();
+        UpdateInstallerService service = new(
+            paths,
+            new FileHashService(),
+            launcher,
+            new FakeTrustVerifier(isConfigured: false, isTrusted: false));
+
+        UpdateDownloadException exception = await Assert.ThrowsAsync<UpdateDownloadException>(() =>
+            service.LaunchAsync(
+                new UpdateInstallerLaunchRequest(download, UserApproved: true),
+                CancellationToken.None));
+
+        Assert.Equal(UpdateDownloadErrorCode.SignatureInvalid, exception.Code);
+        Assert.False(service.IsAutomaticInstallAvailable);
         Assert.Null(launcher.StartedPath);
     }
 
@@ -123,6 +145,8 @@ public sealed class UpdateInstallerServiceTests : IDisposable
             DateTimeOffset.UtcNow);
     }
 
+    private static FakeTrustVerifier TrustedVerifier() => new(isConfigured: true, isTrusted: true);
+
     private sealed class FakeProcessLauncher : IUpdateProcessLauncher
     {
         public string? StartedPath { get; private set; }
@@ -131,6 +155,17 @@ public sealed class UpdateInstallerServiceTests : IDisposable
         {
             StartedPath = installerPath;
             return true;
+        }
+    }
+
+    private sealed class FakeTrustVerifier(bool isConfigured, bool isTrusted) : IUpdateInstallerTrustVerifier
+    {
+        public bool IsTrustPolicyConfigured => isConfigured;
+
+        public Task<bool> VerifyAsync(string installerPath, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(isTrusted);
         }
     }
 

@@ -1,3 +1,4 @@
+using System.Text;
 using Replica.Core.Recovery;
 using Replica.Infrastructure.Paths;
 using Replica.Infrastructure.Recovery;
@@ -31,6 +32,22 @@ public sealed class JsonRecoverySessionStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Save_ProtectsSessionDirectoryFromInheritedReaders()
+    {
+        ReplicaPathProvider paths = new(_testRoot);
+        JsonRecoverySessionStore store = new(paths);
+        RecoveryWizardSession session = CreateSession();
+
+        await store.SaveAsync(session, default);
+
+        DirectoryInfo directory = new(Path.Combine(
+            paths.RecoveryDirectory,
+            "Sessions",
+            session.SessionId));
+        Assert.True(directory.GetAccessControl().AreAccessRulesProtected);
+    }
+
+    [Fact]
     public async Task Load_RejectsTamperedState()
     {
         ReplicaPathProvider paths = new(_testRoot);
@@ -49,6 +66,63 @@ public sealed class JsonRecoverySessionStoreTests : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadAsync(
             session.SessionId,
             default));
+    }
+
+    [Fact]
+    public async Task Load_RejectsOversizedOuterFileBeforeDeserialization()
+    {
+        ReplicaPathProvider paths = new(_testRoot);
+        JsonRecoverySessionStore store = new(paths);
+        string sessionId = Guid.NewGuid().ToString("N");
+        string directory = Path.Combine(paths.RecoveryDirectory, "Sessions", sessionId);
+        Directory.CreateDirectory(directory);
+        string statePath = Path.Combine(directory, "session.json");
+        await File.WriteAllBytesAsync(
+            statePath,
+            new byte[JsonRecoverySessionStore.MaximumSessionFileBytes + 1]);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadAsync(sessionId, default));
+    }
+
+    [Fact]
+    public async Task Load_RejectsOversizedBase64BeforeDecoding()
+    {
+        ReplicaPathProvider paths = new(_testRoot);
+        JsonRecoverySessionStore store = new(paths);
+        string sessionId = Guid.NewGuid().ToString("N");
+        string directory = Path.Combine(paths.RecoveryDirectory, "Sessions", sessionId);
+        Directory.CreateDirectory(directory);
+        int maximumBase64 = ((JsonRecoverySessionStore.MaximumSessionPayloadBytes + 2) / 3) * 4;
+        string envelope = $"{{\"schemaVersion\":1,\"payload\":\"{new string('A', maximumBase64 + 4)}\",\"sha256\":\"{new string('0', 64)}\"}}";
+        await File.WriteAllTextAsync(Path.Combine(directory, "session.json"), envelope, Encoding.UTF8);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadAsync(sessionId, default));
+    }
+
+    [Fact]
+    public async Task Save_RejectsOversizedPayloadWithoutReplacingLastValidState()
+    {
+        ReplicaPathProvider paths = new(_testRoot);
+        JsonRecoverySessionStore store = new(paths);
+        RecoveryWizardSession session = CreateSession();
+        await store.SaveAsync(session, default);
+        RecoveryWizardSession oversized = session with
+        {
+            ManualActions =
+            [
+                new RecoveryManualAction(
+                    "oversized",
+                    "Oversized",
+                    new string('x', JsonRecoverySessionStore.MaximumSessionPayloadBytes),
+                    "Test"),
+            ],
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.SaveAsync(oversized, default));
+        RecoveryWizardSession? loaded = await store.LoadAsync(session.SessionId, default);
+
+        Assert.NotNull(loaded);
+        Assert.Empty(loaded.ManualActions);
     }
 
     [Theory]

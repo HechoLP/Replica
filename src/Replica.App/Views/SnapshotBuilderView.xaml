@@ -21,7 +21,69 @@
                 </Grid>
             </Border>
 
-            <Border Style="{DynamicResource PageCardStyle}">
+            <Border Padding="14" Background="{DynamicResource BadgeBackgroundBrush}" CornerRadius="8">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsOfflineRecoveryPack}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Foreground="{DynamicResource WarningBrush}" FontWeight="SemiBold" Text="Offline Recovery Pack은 사용자가 직접 선택한 설치 파일만 포함합니다. Windows가 신뢰한 게시자 서명, SHA-256, 출처와 라이선스 경고를 검토한 뒤 생성하세요." TextWrapping="Wrap" />
+            </Border>
+
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource PageCardStyle}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsOfflineRecoveryPack}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="오프라인 설치 파일" />
+                    <TextBlock Margin="0,5,0,12" Foreground="{DynamicResource SecondaryTextBrush}" Text="서명되지 않았거나 Windows가 신뢰하지 않는 파일은 거부됩니다. 설치 파일을 보관·재배포할 권한은 사용자가 확인해야 합니다." TextWrapping="Wrap" />
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock FontWeight="SemiBold" Text="출처 (필수)" />
+                            <TextBlock Margin="0,3,0,6" Foreground="{DynamicResource SecondaryTextBrush}" Text="공식 다운로드 URL, 구입 매체 또는 사내 배포 위치를 적으세요." TextWrapping="Wrap" />
+                            <TextBox AutomationProperties.Name="오프라인 설치 파일 출처" Text="{Binding InstallerProvenance, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="라이선스·재배포 경고 (선택)" />
+                            <TextBlock Margin="0,3,0,6" Foreground="{DynamicResource SecondaryTextBrush}" Text="보관 또는 다른 PC 사용 조건을 기록하세요." TextWrapping="Wrap" />
+                            <TextBox AutomationProperties.Name="설치 파일 라이선스 경고" Text="{Binding InstallerLicenseWarning, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Margin="0,12,0,8">
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding AddOfflineInstallerCommand}" Content="설치 파일 선택·검증" />
+                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding RemoveOfflineInstallerCommand}" Content="선택 제거" />
+                    </WrapPanel>
+                    <DataGrid MaxHeight="260" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding OfflineInstallers}" SelectedItem="{Binding SelectedOfflineInstaller}" AutomationProperties.Name="검증된 오프라인 설치 파일">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="180" Header="프로그램" Binding="{Binding DisplayName}" />
+                            <DataGridTextColumn Width="100" Header="버전" Binding="{Binding Version}" />
+                            <DataGridTextColumn Width="80" Header="아키텍처" Binding="{Binding Architecture}" />
+                            <DataGridTextColumn Width="220" Header="서명 게시자" Binding="{Binding Publisher}" />
+                            <DataGridTextColumn Width="100" Header="크기" Binding="{Binding SizeText}" />
+                            <DataGridTextColumn Width="260" Header="출처" Binding="{Binding Provenance}" />
+                            <DataGridTextColumn Width="360" Header="SHA-256" Binding="{Binding Sha256}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="아직 검증된 설치 파일이 없습니다. Offline Recovery Pack을 만들려면 최소 한 개를 추가하세요.">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding OfflineInstallers.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <Border IsEnabled="{Binding IsSnapshotTypeSupported}" Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
                     <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="포함 카테고리" />
                     <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding Categories}">
@@ -40,7 +102,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{DynamicResource PageCardStyle}">
+            <Border IsEnabled="{Binding IsSnapshotTypeSupported}" Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
                     <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="사용자 폴더 선택" />
                     <TextBlock Margin="0,5,0,10" Foreground="{DynamicResource SecondaryTextBrush}" Text="선택하지 않은 폴더는 절대 포함하지 않습니다. AppData 전체 같은 광범위한 선택은 거부됩니다." TextWrapping="Wrap" />
@@ -59,10 +121,13 @@
                             <DataGridTextColumn Width="260" Header="Snapshot 내부 경로" Binding="{Binding ArchivePath}" />
                         </DataGrid.Columns>
                     </DataGrid>
+                    <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="선택한 사용자 폴더가 없습니다. Recovery Snapshot에 파일을 넣으려면 위 버튼에서 폴더를 직접 선택하세요.">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding SelectedFolders.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Border>
 
-            <Grid>
+            <Grid IsEnabled="{Binding IsSnapshotTypeSupported}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Style="{DynamicResource PageCardStyle}">
                     <StackPanel>
@@ -85,9 +150,10 @@
                 </Border>
             </Grid>
 
-            <Border Style="{DynamicResource PageCardStyle}">
+            <Border IsEnabled="{Binding IsSnapshotTypeSupported}" Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
                     <TextBlock FontWeight="SemiBold" Text="{Binding EstimatedSizeText}" />
+                    <TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="Recovery 계열은 폴더 또는 설치 파일 목록이 바뀔 때마다 예상 용량을 다시 계산해야 생성할 수 있습니다." TextWrapping="Wrap" />
                     <ProgressBar Margin="0,10,0,0" Height="10" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" />
                     <TextBlock Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite" Text="{Binding StatusText}" TextWrapping="Wrap" />
                     <CheckBox Margin="0,14,0,0" AutomationProperties.Name="Snapshot 생성 최종 승인" IsChecked="{Binding IsFinalApprovalChecked}">
@@ -95,7 +161,7 @@
                     </CheckBox>
                     <WrapPanel Margin="0,14,0,0">
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding EstimateCommand}" Content="예상 용량 계산" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding CreateCommand}" Content="Snapshot 생성" />
+                        <Button Style="{DynamicResource PrimaryActionButtonStyle}" Command="{Binding CreateCommand}" Content="Snapshot 생성" />
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding CreateCancelCommand}" Content="생성 취소" />
                         <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding DataContext.ShowPortableExportCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="외부 저장장치로 내보내기" />
                     </WrapPanel>

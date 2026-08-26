@@ -131,7 +131,7 @@ public sealed class ElevatedPlanStore : IElevatedPlanStore
                 Sha256Hex(Encoding.UTF8.GetBytes(arguments.SingleUseToken))) ||
             !envelope.Plan.IsApproved ||
             envelope.Plan.Actions is not { Count: 1 } ||
-            envelope.FileRequests is null)
+            envelope.FileRequests is not { Count: 0 })
         {
             throw new InvalidOperationException("The elevated restore plan authorization is invalid or expired.");
         }
@@ -142,16 +142,9 @@ public sealed class ElevatedPlanStore : IElevatedPlanStore
             action.IsManualOnly ||
             action.Dependencies.Count != 0 ||
             !IsAllowedElevatedAction(action.Type) ||
-            envelope.FileRequests.Any(request => request is null) ||
-            envelope.FileRequests.Count > 1)
+            envelope.FileRequests.Any(request => request is null))
         {
             throw new InvalidOperationException("The elevated restore plan contains a disallowed action.");
-        }
-
-        if (envelope.FileRequests.Count == 1 &&
-            action.Type is not (RestoreActionType.RestoreFile or RestoreActionType.RestoreSelectedUserFile))
-        {
-            throw new InvalidOperationException("The elevated restore plan contains unrelated file data.");
         }
     }
 
@@ -196,13 +189,9 @@ public sealed class ElevatedPlanStore : IElevatedPlanStore
     private static bool IsAllowedElevatedAction(RestoreActionType type)
     {
         return type is
-            RestoreActionType.InstallPackage or
-            RestoreActionType.UpdatePackage or
             RestoreActionType.SetMachineEnvironmentVariable or
             RestoreActionType.AddPathEntry or
-            RestoreActionType.RestoreRegistryValue or
-            RestoreActionType.RestoreFile or
-            RestoreActionType.RestoreSelectedUserFile;
+            RestoreActionType.RestoreRegistryValue;
     }
 
     private static void ValidateArguments(ElevatedExecutorArguments arguments)

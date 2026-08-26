@@ -34,7 +34,7 @@ Replica will inventory:
 - installed font metadata;
 - selected application/game settings and explicitly selected user files.
 
-Replica will create, read, validate, optionally encrypt, compare, and restore supported `.replica` snapshots. It will show confidence, risk, privilege, restart, rollback, manual-action, and compatibility information before execution.
+Replica will create, read, validate, optionally encrypt, compare, and restore supported `.replica` snapshots. Windows Offline Recovery Packs may contain only explicitly selected, Windows-trusted installers bound to reviewed publisher-certificate, hash, size, provenance, architecture, and licensing metadata; recovery exports but never auto-executes them. Replica will show confidence, risk, privilege, restart, rollback, manual-action, and compatibility information before execution.
 
 The macOS Preview creates and validates unencrypted Lightweight Snapshots and can inspect unencrypted Snapshot metadata. Recovery payload capture, encryption-password UI, comparison-to-restore, execution, elevation, restart/resume, and rollback remain Windows-only until typed macOS policies and journals exist.
 
@@ -61,11 +61,11 @@ The macOS Preview creates and validates unencrypted Lightweight Snapshots and ca
 - A valid snapshot can be moved between supported clients and reliably validated before use; restoration is permitted only on a platform with explicit typed support.
 - Partial scans and restores preserve useful results and clearly report failures.
 - The default workflow excludes sensitive information and requires explicit selection for user files.
-- CI produces tested, checksummed Windows x64, macOS ARM64, and macOS x64 installer artifacts for a tagged release.
+- CI produces tested, checksummed Windows x64, macOS ARM64, and macOS x64 installer artifacts for a tagged release, and blocks Stable publication unless Windows signing and Apple notarization succeed.
 
 ## Constraints and open questions
 
 - Windows is `win-x64` self-contained; macOS Preview packages are `osx-arm64` and `osx-x64` self-contained Avalonia app bundles.
-- Code signing is desirable but not assumed. Unsigned builds must say so clearly.
+- Unsigned builds must say so clearly. Update lookup and download may remain available, but in-app installer launch requires a configured trusted Authenticode publisher policy and otherwise fails closed.
 - The repository owner must select a license before accepting external reuse or contributions.
 - Supported application settings need an allow-listed plugin model; generic registry or AppData copying is outside the safe default.

@@ -41,9 +41,11 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
 
         string operationId = Guid.NewGuid().ToString("N");
         string fileName = Path.GetFileNameWithoutExtension(destinationPath);
-        string stagingDirectory = Path.Combine(destinationDirectory, $".{fileName}.{operationId}.staging");
+        string stagingDirectory = GetPrivateStagingDirectory(operationId);
         string temporaryArchivePath = Path.Combine(destinationDirectory, $".{fileName}.{operationId}.replica");
         byte[]? encryptionKey = null;
+        bool published = false;
+        bool completed = false;
 
         try
         {
@@ -55,7 +57,8 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             ValidateEstimate(request, estimate);
 
             cancellationToken.ThrowIfCancellationRequested();
-            Directory.CreateDirectory(stagingDirectory);
+            EnsurePrivateStagingCapacity(stagingDirectory, estimate.TotalSize);
+            CreatePrivateStagingDirectory(stagingDirectory);
             progress?.Report(
                 new ReplicaSnapshotProgress(
                     ReplicaSnapshotStage.Staging,
@@ -76,6 +79,7 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
                 string hash = await CopySelectedFileAsync(file.SourcePath, stagedPath, cancellationToken)
                     .ConfigureAwait(false);
                 long stagedLength = new FileInfo(stagedPath).Length;
+                ValidateOfflineInstallerIdentity(request.Recovery, file, stagedLength, hash);
                 copiedBytes = checked(copiedBytes + stagedLength);
                 artifacts.Add(
                     new ReplicaArtifact(
@@ -161,6 +165,9 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
                 new ReplicaSnapshotReadRequest(temporaryArchivePath, password),
                 progress: null,
                 cancellationToken).ConfigureAwait(false);
+            string reviewedArchiveSha256 = await SnapshotHashing.ComputeFileSha256Async(
+                temporaryArchivePath,
+                cancellationToken).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
             DeleteDirectorySafely(stagingDirectory);
@@ -171,6 +178,21 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             }
 
             File.Move(temporaryArchivePath, destinationPath, overwrite: false);
+            published = true;
+            _ = await snapshotReader.ReadAsync(
+                new ReplicaSnapshotReadRequest(destinationPath, password),
+                progress: null,
+                cancellationToken).ConfigureAwait(false);
+            string publishedArchiveSha256 = await SnapshotHashing.ComputeFileSha256Async(
+                destinationPath,
+                cancellationToken).ConfigureAwait(false);
+            if (!FixedHashEquals(reviewedArchiveSha256, publishedArchiveSha256))
+            {
+                throw new ReplicaSnapshotException(
+                    "The snapshot changed while it was being published.");
+            }
+
+            completed = true;
             progress?.Report(new ReplicaSnapshotProgress(ReplicaSnapshotStage.Completed, 1, 1, 0, 0));
             return manifest;
         }
@@ -198,11 +220,121 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             {
                 DeleteFileIfPresent(temporaryArchivePath);
                 DeleteDirectorySafely(stagingDirectory);
+                if (published && !completed)
+                {
+                    DeleteFileIfPresent(destinationPath);
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 throw new ReplicaSnapshotException("Temporary snapshot data could not be removed safely.");
             }
+        }
+    }
+
+    private static string GetPrivateStagingDirectory(string operationId)
+    {
+        string localApplicationData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localApplicationData))
+        {
+            throw new ReplicaSnapshotException(
+                "The private application data directory is unavailable.");
+        }
+
+        return Path.Combine(
+            Path.GetFullPath(localApplicationData),
+            "Replica",
+            "Temp",
+            "SnapshotStaging",
+            operationId);
+    }
+
+    private static void CreatePrivateStagingDirectory(string stagingDirectory)
+    {
+        string? stagingRoot = Path.GetDirectoryName(stagingDirectory);
+        if (string.IsNullOrWhiteSpace(stagingRoot))
+        {
+            throw new ReplicaSnapshotException("The private staging path is invalid.");
+        }
+
+        Directory.CreateDirectory(stagingRoot);
+        if (SnapshotPathValidator.ContainsReparsePoint(stagingRoot))
+        {
+            throw new ReplicaSnapshotException(
+                "The private staging directory contains a reparse point.");
+        }
+
+        Directory.CreateDirectory(stagingDirectory);
+        if (SnapshotPathValidator.ContainsReparsePoint(stagingDirectory))
+        {
+            throw new ReplicaSnapshotException(
+                "The private staging directory changed or became unsafe.");
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                stagingDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static void EnsurePrivateStagingCapacity(string stagingDirectory, long payloadBytes)
+    {
+        if (payloadBytes <= 0)
+        {
+            return;
+        }
+
+        string? volumeRoot = Path.GetPathRoot(Path.GetFullPath(stagingDirectory));
+        if (string.IsNullOrWhiteSpace(volumeRoot))
+        {
+            throw new ReplicaSnapshotException(
+                "Replica could not identify the private staging volume.");
+        }
+
+        try
+        {
+            const long metadataAndSafetyReserve = 64L * 1024 * 1024;
+            long requiredBytes = checked(payloadBytes + metadataAndSafetyReserve);
+            long availableBytes = new DriveInfo(volumeRoot).AvailableFreeSpace;
+            if (availableBytes < requiredBytes)
+            {
+                throw new ReplicaSnapshotException(
+                    "The private staging volume does not have enough free space for the selected recovery data.");
+            }
+        }
+        catch (OverflowException)
+        {
+            throw new ReplicaSnapshotException(
+                "The selected recovery data is too large to stage safely.");
+        }
+        catch (IOException exception)
+        {
+            throw new ReplicaSnapshotException(
+                "Replica could not verify free space on the private staging volume.",
+                exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new ReplicaSnapshotException(
+                "Replica could not access the private staging volume.",
+                exception);
+        }
+    }
+
+    private static bool FixedHashEquals(string first, string second)
+    {
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(first),
+                Convert.FromHexString(second));
+        }
+        catch (FormatException)
+        {
+            return false;
         }
     }
 
@@ -223,6 +355,7 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
             request.Recovery is null ||
             request.Recovery.SelectedFolders is null ||
             request.Recovery.OfflineInstallers is null ||
+            request.Recovery.OfflineInstallers.Count > 100 ||
             request.Capabilities is null ||
             request.Exclusions is null)
         {
@@ -256,7 +389,13 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
                 string.IsNullOrWhiteSpace(installer.SourcePath) ||
                 string.IsNullOrWhiteSpace(installer.ArchivePath) ||
                 string.IsNullOrWhiteSpace(installer.DisplayName) ||
-                string.IsNullOrWhiteSpace(installer.Provenance)) ||
+                string.IsNullOrWhiteSpace(installer.Provenance) ||
+                string.IsNullOrWhiteSpace(installer.Architecture) ||
+                string.IsNullOrWhiteSpace(installer.Publisher) ||
+                !IsSha256(installer.PublisherCertificateSha256) ||
+                !IsSha256(installer.ExpectedSha256) ||
+                installer.ExpectedSize is null or <= 0 ||
+                installer.ExpectedSize > ReplicaSnapshotReadLimits.Default.MaximumEntrySize) ||
             request.Inventory.Environment.Variables.Any(variable =>
                 variable is null || string.IsNullOrWhiteSpace(variable.Name)))
         {
@@ -390,6 +529,52 @@ public sealed class ReplicaSnapshotWriter : ISnapshotWriter
         }
 
         return false;
+    }
+
+    private static void ValidateOfflineInstallerIdentity(
+        ReplicaRecoveryOptions recovery,
+        ReplicaFileEstimate file,
+        long copiedSize,
+        string copiedSha256)
+    {
+        ReplicaOfflineInstaller? installer = recovery.OfflineInstallers.FirstOrDefault(candidate =>
+            string.Equals(
+                Path.GetFullPath(candidate.SourcePath),
+                Path.GetFullPath(file.SourcePath),
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                SnapshotPathValidator.BuildInstallerEntryPath(candidate.ArchivePath),
+                file.ArchivePath,
+                StringComparison.Ordinal));
+        if (installer is null)
+        {
+            return;
+        }
+
+        if (installer.ExpectedSize != copiedSize ||
+            !string.Equals(installer.ExpectedSha256, copiedSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ReplicaSnapshotException(
+                "An offline installer changed after publisher and checksum review.");
+        }
+    }
+
+    private static bool IsSha256(string? value)
+    {
+        if (value?.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = Convert.FromHexString(value);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static ReplicaSnapshotManifest CreateManifest(

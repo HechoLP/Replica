@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Replica.Core.Diffing;
 using Replica.Core.Planning;
 using Replica.Core.Plugins;
@@ -14,22 +15,35 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
     [
         "token",
         "password",
+        "passwd",
+        "pwd",
         "secret",
         "credential",
         "authorization",
-        "authToken",
         "oauth",
         "bearer",
         "cookie",
-        "streamKey",
-        "stream_key",
-        "stream key",
+        "apikey",
+        "accesskey",
+        "clientkey",
+        "signingkey",
+        "streamkey",
+        "encryptionkey",
+        "decryptionkey",
         "license",
-        "serialNumber",
-        "activationCode",
-        "connectionString",
-        "privateKey",
+        "serialnumber",
+        "activationcode",
+        "connectionstring",
+        "privatekey",
     ];
+    private static readonly Regex ExternalUrlPattern = new(
+        @"https?://[^\s\""'<>]+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+    private static readonly Regex CredentialAssignmentPattern = new(
+        @"(?ix)(?:api[_\-. ]?key|access[_\-. ]?key|client[_\-. ]?secret|private[_\-. ]?key|password|passwd|pwd|token|authorization|cookie|connection[_\-. ]?string)\s*[:=]\s*[^\s,;]+",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
 
     public abstract string Id { get; }
 
@@ -178,11 +192,11 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
         return new PluginSnapshot(Id, Version, values, files, exclusions, warnings ?? []);
     }
 
-    protected static async Task<PluginCapturedFile?> CaptureFileAsync(
+    protected static async Task<PluginCapturedFile?> CaptureProjectedJsonFileAsync(
         IDeveloperPluginHost host,
         string physicalPath,
         string logicalPath,
-        bool sanitizeJson,
+        IReadOnlyDictionary<string, Func<JsonElement, bool>> allowedRootProperties,
         CancellationToken cancellationToken)
     {
         string? content = await host.ReadTextFileAsync(physicalPath, cancellationToken)
@@ -192,45 +206,78 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
             return null;
         }
 
-        if (sanitizeJson)
-        {
-            content = SanitizeJson(content);
-            if (content is null)
-            {
-                return null;
-            }
-        }
-
-        return new PluginCapturedFile(
-            logicalPath.Replace('\\', '/'),
-            content,
-            logicalPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                ? "application/json"
-                : "text/plain");
+        string? projected = ProjectAllowListedJson(content, allowedRootProperties);
+        return projected is null
+            ? null
+            : new PluginCapturedFile(
+                logicalPath.Replace('\\', '/'),
+                projected,
+                "application/json");
     }
 
-    protected static string? SanitizeJson(string json)
+    protected static string? ProjectAllowListedJson(
+        string json,
+        IReadOnlyDictionary<string, Func<JsonElement, bool>> allowedRootProperties)
     {
         try
         {
-            JsonNode? node = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
+            using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip,
                 MaxDepth = 64,
             });
-            if (node is null)
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }
 
-            RemoveSensitiveNodes(node);
-            return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            JsonObject projected = [];
+            foreach ((string propertyName, Func<JsonElement, bool> validator) in allowedRootProperties)
+            {
+                if (!document.RootElement.TryGetProperty(propertyName, out JsonElement value) ||
+                    !validator(value))
+                {
+                    continue;
+                }
+
+                projected[propertyName] = JsonNode.Parse(value.GetRawText());
+            }
+
+            return projected.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    protected static bool IsJsonBoolean(JsonElement value) =>
+        value.ValueKind is JsonValueKind.True or JsonValueKind.False;
+
+    protected static bool IsJsonIntegerInRange(JsonElement value, int minimum, int maximum) =>
+        value.ValueKind == JsonValueKind.Number &&
+        value.TryGetInt32(out int parsed) &&
+        parsed >= minimum &&
+        parsed <= maximum;
+
+    protected static bool IsJsonGuid(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String &&
+        Guid.TryParse(value.GetString(), out _);
+
+    protected static bool IsSafePreferenceToken(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        string? text = value.GetString();
+        return text is not null &&
+            text.Length is > 0 and <= 128 &&
+            !IsSensitiveText(text) &&
+            text.All(character => char.IsLetterOrDigit(character) ||
+                character is ' ' or '.' or '-' or '_' or '#' or '{' or '}' or '%');
     }
 
     protected static IReadOnlyDictionary<string, string> ParseAllowListedConfiguration(
@@ -255,29 +302,64 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
             string value = line[(separator + 1)..].Trim();
             bool safeCredentialHelperName = key.Equals(
                 "credential.helper",
-                StringComparison.OrdinalIgnoreCase);
-            if (allowKey(key) && (safeCredentialHelperName || !IsSensitiveKey(key)))
+                StringComparison.OrdinalIgnoreCase) &&
+                value.Length is > 0 and <= 64 &&
+                value.All(character => char.IsLetterOrDigit(character) || character is '.' or '-' or '_');
+            if (allowKey(key) &&
+                (safeCredentialHelperName ||
+                    !key.Equals("credential.helper", StringComparison.OrdinalIgnoreCase) &&
+                    !IsSensitiveKey(key) &&
+                    !IsSensitiveText(value)))
             {
-                values[key] = value;
+                values[key] = SanitizeExternalUrls(value);
             }
         }
 
         return values;
     }
 
-    protected static string SanitizeTextContent(string content)
-    {
-        string[] safeLines = content
-            .Split(['\r', '\n'])
-            .Where(line => !IsSensitiveKey(line))
-            .ToArray();
-        return string.Join(Environment.NewLine, safeLines);
-    }
-
     protected internal static bool IsSensitiveKey(string key)
     {
+        string normalized = new(key
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray());
         return SensitiveKeyParts.Any(part =>
-            key.Contains(part, StringComparison.OrdinalIgnoreCase));
+            normalized.Contains(part, StringComparison.Ordinal));
+    }
+
+    protected static string SanitizeExternalUrls(string value) =>
+        ExternalUrlPattern.Replace(value, static match =>
+        {
+            if (!Uri.TryCreate(match.Value, UriKind.Absolute, out Uri? uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return string.Empty;
+            }
+
+            UriBuilder safe = new(uri.Scheme, uri.Host, uri.IsDefaultPort ? -1 : uri.Port)
+            {
+                Path = "/",
+                Query = string.Empty,
+                Fragment = string.Empty,
+                UserName = string.Empty,
+                Password = string.Empty,
+            };
+            return safe.Uri.AbsoluteUri;
+        });
+
+    private static bool IsSensitiveText(string value)
+    {
+        if (IsSensitiveKey(value) || CredentialAssignmentPattern.IsMatch(value))
+        {
+            return true;
+        }
+
+        return ExternalUrlPattern.Matches(value).Any(match =>
+            Uri.TryCreate(match.Value, UriKind.Absolute, out Uri? uri) &&
+            (!string.IsNullOrEmpty(uri.UserInfo) ||
+             !string.IsNullOrEmpty(uri.Query) ||
+             !string.IsNullOrEmpty(uri.Fragment)));
     }
 
     protected static string HashFingerprint(string content)
@@ -376,34 +458,6 @@ public abstract class BuiltInDeveloperPluginBase : IBuiltInPlugin
         catch (JsonException)
         {
             return value;
-        }
-    }
-
-    private static void RemoveSensitiveNodes(JsonNode node)
-    {
-        if (node is JsonObject jsonObject)
-        {
-            foreach (string key in jsonObject.Select(item => item.Key).ToArray())
-            {
-                if (IsSensitiveKey(key))
-                {
-                    jsonObject.Remove(key);
-                }
-                else if (jsonObject[key] is JsonNode child)
-                {
-                    RemoveSensitiveNodes(child);
-                }
-            }
-        }
-        else if (node is JsonArray jsonArray)
-        {
-            foreach (JsonNode? child in jsonArray)
-            {
-                if (child is not null)
-                {
-                    RemoveSensitiveNodes(child);
-                }
-            }
         }
     }
 

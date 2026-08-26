@@ -101,7 +101,8 @@ public sealed record RecoveryPreparedSnapshot(
     string Locale,
     DateTimeOffset CreatedAtUtc,
     bool IsEncrypted,
-    IReadOnlyList<RecoveryPathMapping> SuggestedMappings);
+    IReadOnlyList<RecoveryPathMapping> SuggestedMappings,
+    string SnapshotSha256);
 
 public sealed record RecoveryAnalysisResult(
     RestorePlan Plan,
@@ -111,12 +112,15 @@ public sealed record RecoveryAnalysisResult(
     IReadOnlyList<RecoveryManualAction> ManualActions,
     bool HasSufficientStorage,
     long RequiredBytes,
-    long AvailableBytes);
+    long AvailableBytes,
+    Guid SnapshotId = default,
+    string SnapshotSha256 = "");
 
 public sealed record RecoveryExecutionBatch(
     IReadOnlyList<RestoreActionExecutionResult> Actions,
     bool RequiresRestart,
-    bool WasCancelled);
+    bool WasCancelled,
+    bool PayloadCleanupPending = false);
 
 public sealed record RecoveryVerificationResult(
     int? SimilarityAfter,
@@ -146,7 +150,11 @@ public sealed record RecoveryWizardSession(
     bool RestartApproved,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    string? FailureReasonCode = null)
+    string? FailureReasonCode = null,
+    string SnapshotSha256 = "",
+    string? ReviewBindingSha256 = null,
+    long? RequiredBytes = null,
+    long? AvailableBytes = null)
 {
     public bool RequiresPassword => SnapshotEncrypted;
 

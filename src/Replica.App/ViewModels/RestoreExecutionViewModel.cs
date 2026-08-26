@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Replica.App.Services;
@@ -83,7 +84,7 @@ public sealed partial class RestoreExecutionViewModel : ObservableObject
         IsBusy = true;
         CanCancel = true;
         string sessionId = Guid.NewGuid().ToString("N");
-        UiRestoreProgressReporter reporter = new(progress =>
+        UiRestoreProgressReporter reporter = new(Dispatcher.CurrentDispatcher, progress =>
         {
             CurrentStage = GetStateName(progress.State);
             CurrentAction = progress.ActionName;
@@ -119,7 +120,7 @@ public sealed partial class RestoreExecutionViewModel : ObservableObject
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText = $"복원을 안전하게 시작하거나 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "복원을 안전하게 완료하지 못했습니다. 완료된 작업은 Journal에 기록되며, 결과 화면에서 실패 항목과 롤백 가능 여부를 확인하세요.";
         }
         finally
         {
@@ -149,13 +150,23 @@ public sealed partial class RestoreExecutionViewModel : ObservableObject
         _ => "롤백됨",
     };
 
-    private sealed class UiRestoreProgressReporter(Action<RestoreProgress> report) : IRestoreProgressReporter
+    private sealed class UiRestoreProgressReporter(
+        Dispatcher dispatcher,
+        Action<RestoreProgress> report) : IRestoreProgressReporter
     {
-        public Task ReportAsync(RestoreProgress progress, CancellationToken cancellationToken)
+        public async Task ReportAsync(RestoreProgress progress, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            report(progress);
-            return Task.CompletedTask;
+            if (dispatcher.CheckAccess())
+            {
+                report(progress);
+                return;
+            }
+
+            await dispatcher.InvokeAsync(
+                () => report(progress),
+                DispatcherPriority.DataBind,
+                cancellationToken);
         }
     }
 }

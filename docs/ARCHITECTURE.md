@@ -28,10 +28,11 @@ Dependencies point inward: platform apps and infrastructure depend on Core abstr
 ## Major subsystems
 
 - **Bootstrap and shell:** dependency injection, navigation, dialogs, localization, theme, global exception handling, version information, and Windows compatibility checks.
-- **WPF workspace:** a single unelevated Shell hosts dedicated Home, Scan, Snapshot Builder, Comparison, Diff, Restore Plan, Recovery, Execution, Result, History, Settings, About, and Update views. View models own state and commands; code-behind only initializes controls.
+- **WPF workspace:** a single unelevated Shell exposes task-oriented entry points for current-PC inspection, Snapshot creation, Snapshot comparison/restoration, post-reset recovery, and history. Dedicated Comparison, Diff, Plan, Execution, and Result views remain internal workflow stages rather than permanent top-level navigation. View models own state and commands; code-behind only initializes controls.
 - **macOS Preview workspace:** a single Avalonia Shell provides read-only scanning, Lightweight Snapshot creation/validation, Snapshot inspection, and Release lookup. It never registers or resolves Windows mutation handlers.
 - **Inventory:** coordinates Windows, application, winget, registry, MSIX, environment, font, and plugin scanners. Partial failures become warnings rather than hidden omissions.
 - **Snapshot storage:** writes and validates atomic ZIP-based `.replica` containers, manifests, checksums, optional encrypted payloads, and explicit exclusions.
+- **Offline installer trust:** inspects selected Windows installers under a read lock, requires trusted Authenticode, binds publisher-certificate SHA-256 plus file hash/size into the archive, and revalidates the full Snapshot and every installer during manual export without execution.
 - **Portable export:** inspects user-selected removable, fixed, network, and synchronized destinations, copies through a sibling temporary extension, verifies source/destination SHA-256, and never overwrites a collision.
 - **Snapshot history:** indexes portable Snapshot metadata, comparison keys, audit summaries, and matching overrides in local SQLite without storing archive bodies or selected-file contents.
 - **Matching and diff:** maps inventory identities with confidence levels, compares versions and settings, and emits typed differences without changing the computer.
@@ -40,7 +41,7 @@ Dependencies point inward: platform apps and infrastructure depend on Core abstr
 - **Elevation:** restarts the same `Replica.exe` for the administrator-only subset of an approved, integrity-protected, short-lived plan.
 - **Rollback:** journals original state before every supported mutation and restores only changes made by Replica.
 - **Verification:** rescans relevant targets and records action outcomes, warnings, restarts, and manual follow-up.
-- **Updates:** queries bounded GitHub Releases metadata, applies Stable/Beta/Alpha semantic-version policy, persists exact skipped tags, reports Rate Limits, and downloads only with user consent. Download verification and installer launch approval remain separate.
+- **Updates:** queries bounded GitHub Releases metadata, applies Stable/Beta/Alpha semantic-version policy, persists exact skipped tags, reports Rate Limits, and downloads only with user consent. Download verification and installer launch approval remain separate; launch requires a trusted Authenticode chain and a compile-time publisher-certificate pin derived from the signed release identity.
 - **Recovery installer retention:** downloads only the exact official `HechoLP/Replica` release asset after approval, stores it outside the Snapshot, verifies size and available SHA-256 metadata, and never executes it.
 
 ## End-to-end data flow

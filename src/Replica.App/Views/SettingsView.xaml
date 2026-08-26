@@ -7,27 +7,19 @@
             <Border Style="{DynamicResource PageCardStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Margin="0,8" FontWeight="SemiBold" Text="언어" /><ComboBox Grid.Column="1" Margin="0,4" AutomationProperties.Name="표시 언어" DisplayMemberPath="DisplayName" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" />
-                    <TextBlock Grid.Row="1" Margin="0,8" FontWeight="SemiBold" Text="Theme" /><ComboBox Grid.Row="1" Grid.Column="1" Margin="0,4" AutomationProperties.Name="Light 또는 Dark Theme" ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}" />
-                    <TextBlock Grid.Row="2" Margin="0,8" FontWeight="SemiBold" Text="업데이트 Channel" /><ComboBox Grid.Row="2" Grid.Column="1" Margin="0,4" AutomationProperties.Name="업데이트 Channel" ItemsSource="{Binding UpdateChannels}" SelectedItem="{Binding UpdateChannel}" />
-                    <TextBlock Grid.Row="3" Margin="0,8" FontWeight="SemiBold" Text="로그 보존" /><StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"><TextBox Width="100" AutomationProperties.Name="로그 보존 일수" Text="{Binding LogRetentionDays, UpdateSourceTrigger=PropertyChanged}" /><TextBlock Margin="8,7,0,0" Text="일 (1~365)" /></StackPanel>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Margin="0,8" FontWeight="SemiBold" Text="표시 언어" /><TextBlock Grid.Column="1" Margin="0,8" Text="한국어 (현재 지원 언어)" />
+                    <TextBlock Grid.Row="1" Margin="0,8" FontWeight="SemiBold" Text="테마" /><ComboBox Grid.Row="1" Grid.Column="1" Margin="0,4" AutomationProperties.Name="밝은 또는 어두운 테마" ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}" />
+                    <TextBlock Grid.Row="2" Margin="0,8" FontWeight="SemiBold" Text="업데이트 채널" /><ComboBox Grid.Row="2" Grid.Column="1" Margin="0,4" AutomationProperties.Name="업데이트 채널" ItemsSource="{Binding UpdateChannels}" SelectedItem="{Binding UpdateChannel}" />
                 </Grid>
             </Border>
             <Border Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
                     <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="기본 Snapshot 폴더" />
-                    <DockPanel Margin="0,10,0,0"><Button DockPanel.Dock="Right" Margin="8,0,0,0" Padding="12,7" Command="{Binding SelectSnapshotDirectoryCommand}" Content="폴더 선택" /><TextBox AutomationProperties.Name="기본 Snapshot 폴더" Text="{Binding DefaultSnapshotDirectory, UpdateSourceTrigger=PropertyChanged}" /></DockPanel>
+                    <DockPanel Margin="0,10,0,0"><Button DockPanel.Dock="Right" Margin="8,0,0,0" Padding="12,7" Command="{Binding SelectSnapshotDirectoryCommand}" Content="폴더 선택" /><TextBox AutomationProperties.Name="기본 Snapshot 폴더" IsReadOnly="True" Text="{Binding DefaultSnapshotDirectory}" /></DockPanel>
                 </StackPanel>
             </Border>
-            <Border Style="{DynamicResource PageCardStyle}">
-                <StackPanel>
-                    <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="개인정보와 고급 설정" />
-                    <CheckBox Margin="0,10,0,0" IsChecked="{Binding PrivacyModeEnabled}" Content="개인정보 보호 모드: 민감 이름과 값을 UI·로그에서 최소화" />
-                    <CheckBox Margin="0,10,0,0" IsChecked="{Binding ShowAdvancedSettings}" Content="고급 설정 표시" />
-                    <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="고급 설정도 임의 ShellCommand, 자동 제거, 자동 다운그레이드, 무승인 복원을 허용하지 않습니다." TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+            <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryTextBrush}" Text="Replica는 민감 환경변수 값, 브라우저 로그인 상태, 개인키를 Snapshot에 포함하지 않습니다. 이 안전 정책은 설정으로 끌 수 없습니다." TextWrapping="Wrap" />
             <TextBlock AutomationProperties.LiveSetting="Polite" Text="{Binding StatusText}" TextWrapping="Wrap" />
             <WrapPanel Margin="0,14,0,0"><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding LoadCommand}" Content="다시 불러오기" /><Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding SaveCommand}" Content="설정 저장 및 적용" /></WrapPanel>
         </StackPanel>

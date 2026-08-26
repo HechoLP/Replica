@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Replica.Core.Execution;
 using Replica.Core.History;
 using Replica.Core.Planning;
@@ -8,10 +10,12 @@ namespace Replica.Core.Recovery;
 
 public sealed class RecoveryWizardService : IRecoveryWizardService
 {
+    private const int ReviewBindingVersion = 2;
     private readonly IRecoveryWizardRuntime _runtime;
     private readonly IRecoverySessionStore _sessionStore;
     private readonly IRecoveryStartupRegistrar _startupRegistrar;
     private readonly ISnapshotHistoryService? _snapshotHistory;
+    private readonly IOfflineInstallerExportService? _offlineInstallerExporter;
     private readonly TimeProvider _timeProvider;
 
     public RecoveryWizardService(
@@ -19,13 +23,15 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         IRecoverySessionStore sessionStore,
         IRecoveryStartupRegistrar startupRegistrar,
         TimeProvider timeProvider,
-        ISnapshotHistoryService? snapshotHistory = null)
+        ISnapshotHistoryService? snapshotHistory = null,
+        IOfflineInstallerExportService? offlineInstallerExporter = null)
     {
         _runtime = runtime;
         _sessionStore = sessionStore;
         _startupRegistrar = startupRegistrar;
         _timeProvider = timeProvider;
         _snapshotHistory = snapshotHistory;
+        _offlineInstallerExporter = offlineInstallerExporter;
     }
 
     public async Task<RecoveryStartResult> StartAsync(
@@ -77,9 +83,32 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
             false,
             false,
             now,
-            now);
+            now,
+            SnapshotSha256: prepared.SnapshotSha256);
         await _sessionStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
         return new RecoveryStartResult(session, PasswordRequired: false);
+    }
+
+    public async Task<OfflineInstallerExportResult> ExportOfflineInstallersAsync(
+        string sessionId,
+        string destinationDirectory,
+        ReadOnlyMemory<char> password,
+        CancellationToken cancellationToken)
+    {
+        if (_offlineInstallerExporter is null)
+        {
+            throw new InvalidOperationException("Offline installer export is unavailable.");
+        }
+
+        RecoveryWizardSession session = await RequireSessionAsync(sessionId, cancellationToken)
+            .ConfigureAwait(false);
+        return await _offlineInstallerExporter.ExportAsync(
+            session.SnapshotPath,
+            session.SnapshotId,
+            session.SnapshotSha256,
+            destinationDirectory,
+            password,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RecoveryWizardSession> AnalyzeAsync(
@@ -97,22 +126,33 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
             mappings,
             password,
             cancellationToken).ConfigureAwait(false);
+        if (analysis.SnapshotId != session.SnapshotId ||
+            !FixedHashEquals(analysis.SnapshotSha256, session.SnapshotSha256))
+        {
+            throw new ReplicaSnapshotException(
+                "The recovery snapshot changed after the session was started. Review it again.");
+        }
+
         if (!analysis.HasSufficientStorage)
         {
             RecoveryWizardSession failed = Touch(session with
             {
-                Status = RecoveryWizardStatus.Failed,
+                Status = RecoveryWizardStatus.InProgress,
                 CurrentStep = RecoveryWizardStep.ConfirmFileDestinations,
+                Plan = null,
                 PathMappings = analysis.PathMappings,
                 HardwareDifferences = analysis.HardwareDifferences,
                 SimilarityBefore = analysis.SimilarityBefore,
                 FailureReasonCode = "InsufficientStorage",
+                ReviewBindingSha256 = null,
+                RequiredBytes = analysis.RequiredBytes,
+                AvailableBytes = analysis.AvailableBytes,
             });
             await _sessionStore.SaveAsync(failed, cancellationToken).ConfigureAwait(false);
             return failed;
         }
 
-        RecoveryWizardSession analyzed = Touch(session with
+        RecoveryWizardSession analyzedWithoutBinding = Touch(session with
         {
             Status = RecoveryWizardStatus.AwaitingApproval,
             CurrentStep = RecoveryWizardStep.FinalApproval,
@@ -122,13 +162,21 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
             ManualActions = analysis.ManualActions,
             SimilarityBefore = analysis.SimilarityBefore,
             FailureReasonCode = null,
+            ReviewBindingSha256 = null,
+            RequiredBytes = analysis.RequiredBytes,
+            AvailableBytes = analysis.AvailableBytes,
         });
+        RecoveryWizardSession analyzed = analyzedWithoutBinding with
+        {
+            ReviewBindingSha256 = ComputeReviewBinding(analyzedWithoutBinding, analysis.Plan),
+        };
         await _sessionStore.SaveAsync(analyzed, cancellationToken).ConfigureAwait(false);
         return analyzed;
     }
 
     public async Task<RecoveryWizardSession> ApprovePlanAsync(
         string sessionId,
+        string reviewedBindingSha256,
         CancellationToken cancellationToken)
     {
         RecoveryWizardSession session = await RequireSessionAsync(sessionId, cancellationToken)
@@ -136,30 +184,49 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         EnsureStatus(session, RecoveryWizardStatus.AwaitingApproval);
         RestorePlan plan = session.Plan ?? throw new InvalidOperationException(
             "The recovery restore plan is missing.");
-        RecoveryWizardSession approved = Touch(session with
+        ValidateReviewBinding(session, plan, reviewedBindingSha256);
+        RestorePlan approvedPlan = plan.Approve();
+        RecoveryWizardSession approvedWithoutBinding = Touch(session with
         {
             Status = RecoveryWizardStatus.InProgress,
             CurrentStep = RecoveryWizardStep.InstallApplications,
-            Plan = plan.Approve(),
+            Plan = approvedPlan,
+            ReviewBindingSha256 = null,
         });
+        RecoveryWizardSession approved = approvedWithoutBinding with
+        {
+            ReviewBindingSha256 = ComputeReviewBinding(approvedWithoutBinding, approvedPlan),
+        };
         await _sessionStore.SaveAsync(approved, cancellationToken).ConfigureAwait(false);
         return approved;
     }
 
     public Task<RecoveryWizardSession> ExecuteAsync(
         string sessionId,
+        string reviewedBindingSha256,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        return ExecuteCoreAsync(sessionId, password, retryFailed: false, cancellationToken);
+        return ExecuteCoreAsync(
+            sessionId,
+            reviewedBindingSha256,
+            password,
+            retryFailed: false,
+            cancellationToken);
     }
 
     public Task<RecoveryWizardSession> RetryFailedAsync(
         string sessionId,
+        string reviewedBindingSha256,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken)
     {
-        return ExecuteCoreAsync(sessionId, password, retryFailed: true, cancellationToken);
+        return ExecuteCoreAsync(
+            sessionId,
+            reviewedBindingSha256,
+            password,
+            retryFailed: true,
+            cancellationToken);
     }
 
     public async Task<RecoveryWizardSession> ApproveRestartAsync(
@@ -232,17 +299,23 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         RecoveryWizardSession session = await RequireSessionAsync(sessionId, cancellationToken)
             .ConfigureAwait(false);
         await _startupRegistrar.UnregisterAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        bool payloadDeleted = await _runtime.CleanupPayloadAsync(
+            sessionId,
+            CancellationToken.None).ConfigureAwait(false);
         RecoveryWizardSession cancelled = Touch(session with
         {
             Status = RecoveryWizardStatus.Cancelled,
-            FailureReasonCode = "UserCancelled",
+            FailureReasonCode = payloadDeleted
+                ? "UserCancelled"
+                : "UserCancelledPayloadCleanupPending",
         });
-        await _sessionStore.SaveAsync(cancelled, cancellationToken).ConfigureAwait(false);
+        await _sessionStore.SaveAsync(cancelled, CancellationToken.None).ConfigureAwait(false);
         return cancelled;
     }
 
     private async Task<RecoveryWizardSession> ExecuteCoreAsync(
         string sessionId,
+        string reviewedBindingSha256,
         ReadOnlyMemory<char> password,
         bool retryFailed,
         CancellationToken cancellationToken)
@@ -268,6 +341,8 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
             throw new InvalidOperationException("The recovery restore plan is not approved.");
         }
 
+        ValidateReviewBinding(session, plan, reviewedBindingSha256);
+
         RecoveryWizardSession executing = Touch(session with
         {
             Status = RecoveryWizardStatus.Executing,
@@ -276,16 +351,56 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         HashSet<string>? retryIds = retryFailed
             ? session.FailedActionIds.ToHashSet(StringComparer.Ordinal)
             : null;
-        RecoveryExecutionBatch batch = await _runtime.ExecuteAsync(
-            session.SessionId,
-            session.SnapshotPath,
-            plan,
-            session.PathMappings,
-            session.CompletedActionIds.ToHashSet(StringComparer.Ordinal),
-            retryIds,
-            password,
-            cancellationToken).ConfigureAwait(false);
-        RecoveryWizardSession updated = MergeExecution(session, batch);
+        RecoveryExecutionBatch batch;
+        try
+        {
+            batch = await _runtime.ExecuteAsync(
+                session.SessionId,
+                session.SnapshotPath,
+                session.SnapshotId,
+                session.SnapshotSha256,
+                plan,
+                session.PathMappings,
+                session.CompletedActionIds.ToHashSet(StringComparer.Ordinal),
+                retryIds,
+                password,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            bool payloadDeleted = await _runtime.CleanupPayloadAsync(
+                sessionId,
+                CancellationToken.None).ConfigureAwait(false);
+            RecoveryWizardSession cancelled = Touch(session with
+            {
+                Status = RecoveryWizardStatus.Cancelled,
+                FailureReasonCode = payloadDeleted
+                    ? "UserCancelled"
+                    : "UserCancelledPayloadCleanupPending",
+            });
+            await _sessionStore.SaveAsync(cancelled, CancellationToken.None).ConfigureAwait(false);
+            return cancelled;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            bool payloadDeleted = await _runtime.CleanupPayloadAsync(
+                sessionId,
+                CancellationToken.None).ConfigureAwait(false);
+            RecoveryWizardSession failed = Touch(session with
+            {
+                Status = RecoveryWizardStatus.Failed,
+                FailureReasonCode = payloadDeleted
+                    ? "ExecutionFailed"
+                    : "PayloadCleanupPending",
+            });
+            await _sessionStore.SaveAsync(failed, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+        RecoveryWizardSession merged = MergeExecution(session, batch);
+        RecoveryWizardSession updated = merged with
+        {
+            ReviewBindingSha256 = ComputeReviewBinding(merged, plan),
+        };
         await _sessionStore.SaveAsync(updated, CancellationToken.None).ConfigureAwait(false);
         if (updated.Status == RecoveryWizardStatus.Cancelled ||
             updated.Status == RecoveryWizardStatus.AwaitingRestartApproval)
@@ -309,9 +424,14 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
         await _sessionStore.SaveAsync(verifying, cancellationToken).ConfigureAwait(false);
         RecoveryVerificationResult verification = await _runtime.VerifyAsync(
             session.SnapshotPath,
+            session.SnapshotId,
+            session.SnapshotSha256,
             session.PathMappings,
             password,
             cancellationToken).ConfigureAwait(false);
+        bool payloadDeleted = await _runtime.CleanupPayloadAsync(
+            session.SessionId,
+            CancellationToken.None).ConfigureAwait(false);
         RecoveryWizardSession completed = Touch(verifying with
         {
             Status = RecoveryWizardStatus.Completed,
@@ -321,9 +441,10 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
                 .Concat(verification.ManualActions)
                 .DistinctBy(action => action.Id, StringComparer.Ordinal)
                 .ToArray(),
+            FailureReasonCode = payloadDeleted ? null : "PayloadCleanupPending",
         });
-        await _sessionStore.SaveAsync(completed, cancellationToken).ConfigureAwait(false);
-        await TryRecordRestoreHistoryAsync(completed, cancellationToken).ConfigureAwait(false);
+        await _sessionStore.SaveAsync(completed, CancellationToken.None).ConfigureAwait(false);
+        await TryRecordRestoreHistoryAsync(completed, CancellationToken.None).ConfigureAwait(false);
         return completed;
     }
 
@@ -401,7 +522,9 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
             CompletedActionIds = completed,
             FailedActionIds = failed,
             RequiresRestart = batch.RequiresRestart,
-            FailureReasonCode = batch.WasCancelled ? "UserCancelled" : null,
+            FailureReasonCode = batch.PayloadCleanupPending
+                ? "PayloadCleanupPending"
+                : batch.WasCancelled ? "UserCancelled" : null,
         });
     }
 
@@ -421,6 +544,53 @@ public sealed class RecoveryWizardService : IRecoveryWizardService
     private RecoveryWizardSession Touch(RecoveryWizardSession session)
     {
         return session with { UpdatedAtUtc = _timeProvider.GetUtcNow() };
+    }
+
+    private static void ValidateReviewBinding(
+        RecoveryWizardSession session,
+        RestorePlan plan,
+        string reviewedBindingSha256)
+    {
+        string actual = ComputeReviewBinding(session, plan);
+        if (session.ReviewBindingSha256 is null ||
+            !FixedHashEquals(session.ReviewBindingSha256, actual) ||
+            !FixedHashEquals(reviewedBindingSha256, actual))
+        {
+            throw new InvalidOperationException(
+                "The recovery plan, snapshot, or destination mapping changed after review. Review it again.");
+        }
+    }
+
+    private static string ComputeReviewBinding(
+        RecoveryWizardSession session,
+        RestorePlan plan)
+    {
+        byte[] canonical = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            Version = ReviewBindingVersion,
+            session.SessionId,
+            session.SnapshotId,
+            SnapshotSha256 = session.SnapshotSha256.ToUpperInvariant(),
+            Plan = plan,
+            Mappings = session.PathMappings,
+            CompletedActionIds = session.CompletedActionIds.Order(StringComparer.Ordinal),
+            FailedActionIds = session.FailedActionIds.Order(StringComparer.Ordinal),
+        });
+        return Convert.ToHexString(SHA256.HashData(canonical));
+    }
+
+    private static bool FixedHashEquals(string first, string second)
+    {
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(first),
+                Convert.FromHexString(second));
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static void EnsureStatus(

@@ -34,7 +34,11 @@ public sealed class InstallerContractTests
         Assert.Contains("--open-snapshot", installer, StringComparison.Ordinal);
         Assert.Contains("if UninstallSilent then", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("[UninstallDelete]", installer, StringComparison.Ordinal);
-        Assert.DoesNotContain("SignTool=", installer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#ifdef ReplicaSigningEnabled", installer, StringComparison.Ordinal);
+        Assert.Contains("SignTool=replica", installer, StringComparison.Ordinal);
+        Assert.Contains("SignedUninstaller=yes", installer, StringComparison.Ordinal);
+        Assert.Contains("InfoBeforeFile=UNSIGNED.txt", installer, StringComparison.Ordinal);
+        Assert.Contains("SignedUninstaller=no", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("helper", installer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("service", installer, StringComparison.OrdinalIgnoreCase);
     }

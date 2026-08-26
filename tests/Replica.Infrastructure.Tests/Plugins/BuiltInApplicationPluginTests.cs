@@ -43,6 +43,7 @@ public sealed class BuiltInApplicationPluginTests
         Assert.Equal("True", snapshot.Values["application.installed"]);
         Assert.NotEmpty(snapshot.Exclusions);
         Assert.DoesNotContain("TOP_SECRET", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("OPAQUE_CREDENTIAL_48391", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("serviceToken", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("streamKey", serialized, StringComparison.OrdinalIgnoreCase);
     }
@@ -98,7 +99,7 @@ public sealed class BuiltInApplicationPluginTests
     }
 
     [Fact]
-    public async Task PowerToys_CapturesRequestedModulesAndReportsInvalidJson()
+    public async Task PowerToys_CapturesOnlySchemaAllowListedPreferencesAndReportsInvalidJson()
     {
         FixtureApplicationPluginHost host = FixtureApplicationPluginHost.Load("powertoys");
         PowerToysPlugin plugin = new();
@@ -108,10 +109,10 @@ public sealed class BuiltInApplicationPluginTests
 
         Assert.Contains(snapshot.Files, file => file.LogicalPath == "settings.json");
         Assert.Contains(snapshot.Files, file => file.LogicalPath == "FancyZones/settings.json");
-        Assert.Contains(snapshot.Files, file => file.LogicalPath == "Keyboard Manager/default.json");
         Assert.Contains(snapshot.Files, file => file.LogicalPath == "PowerRename/settings.json");
-        Assert.Contains(snapshot.Files, file => file.LogicalPath == "AlwaysOnTop/settings.json");
         Assert.Contains(snapshot.Files, file => file.LogicalPath == "Awake/settings.json");
+        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath.Contains("Keyboard Manager", StringComparison.Ordinal));
+        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath.Contains("app-zone-history", StringComparison.Ordinal));
 
         host.SetFile("{LocalAppData}/Microsoft/PowerToys/settings.json", "{invalid-json");
         PluginSnapshot invalid = await plugin.CaptureAsync(
@@ -139,7 +140,7 @@ public sealed class BuiltInApplicationPluginTests
     }
 
     [Fact]
-    public async Task Obs_CapturesSceneProfileHotkeyAudioVideoAndRedactsUrlQuery()
+    public async Task Obs_CapturesOnlyAllowListedProfileScalars()
     {
         FixtureApplicationPluginHost host = FixtureApplicationPluginHost.Load("obs");
         ObsStudioPlugin plugin = new();
@@ -147,18 +148,13 @@ public sealed class BuiltInApplicationPluginTests
         PluginSnapshot snapshot = await plugin.CaptureAsync(
             new PluginCaptureContext(host),
             CancellationToken.None);
-        string content = string.Join('\n', snapshot.Files.Select(file => file.Content));
+        string serialized = JsonSerializer.Serialize(snapshot);
 
-        Assert.Contains(snapshot.Files, file => file.LogicalPath == "scenes/Main.json");
-        Assert.Contains(snapshot.Files, file => file.LogicalPath.EndsWith(
-            "basic.ini",
-            StringComparison.Ordinal));
-        Assert.Contains("OBS_KEY_F9", content, StringComparison.Ordinal);
-        Assert.Contains("SampleRate=48000", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("?token=", content, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath.Contains(
-            "service.json",
-            StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(snapshot.Files);
+        Assert.Contains(snapshot.Values, pair => pair.Key.EndsWith("samplerate", StringComparison.Ordinal) && pair.Value == "48000");
+        Assert.Contains(snapshot.Values, pair => pair.Key.EndsWith("basecx", StringComparison.Ordinal) && pair.Value == "1920");
+        Assert.DoesNotContain("OBS_KEY_F9", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("?token=", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -171,8 +167,8 @@ public sealed class BuiltInApplicationPluginTests
             CancellationToken.None);
         host.IsRunning = true;
         host.SetFile(
-            "{AppData}/obs-studio/basic/scenes/Main.json",
-            "{\"name\":\"Changed\",\"hotkeys\":{}}");
+            "{AppData}/obs-studio/basic/profiles/Streaming/basic.ini",
+            "[Audio]\nSampleRate=44100\n[Video]\nBaseCX=1280\nBaseCY=720\n");
         PluginSnapshot target = await plugin.CaptureAsync(
             new PluginCaptureContext(host),
             CancellationToken.None);
@@ -231,7 +227,7 @@ public sealed class BuiltInApplicationPluginTests
     }
 
     [Fact]
-    public async Task Docker_CapturesResourcesAndWslIntegrationWithoutRuntimeData()
+    public async Task Docker_CapturesOnlyAllowListedResourcesWithoutRuntimeData()
     {
         FixtureApplicationPluginHost host = FixtureApplicationPluginHost.Load("docker");
         DockerDesktopPlugin plugin = new();
@@ -242,7 +238,7 @@ public sealed class BuiltInApplicationPluginTests
         string serialized = JsonSerializer.Serialize(snapshot);
 
         Assert.Contains("memoryMiB", serialized, StringComparison.Ordinal);
-        Assert.Contains("wslIntegrations", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("wslIntegrations", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain(snapshot.Files, file => file.LogicalPath.EndsWith(
             ".vhdx",
             StringComparison.OrdinalIgnoreCase));
@@ -250,7 +246,7 @@ public sealed class BuiltInApplicationPluginTests
     }
 
     [Fact]
-    public async Task Ableton_CapturesPreferencesAndPathsWithoutProjectsOrLicensedContent()
+    public async Task Ableton_ProjectsAllowListedPreferencesWithoutOpaqueFiles()
     {
         FixtureApplicationPluginHost host = FixtureApplicationPluginHost.Load("ableton");
         AbletonLivePlugin plugin = new();
@@ -258,11 +254,12 @@ public sealed class BuiltInApplicationPluginTests
         PluginSnapshot snapshot = await plugin.CaptureAsync(
             new PluginCaptureContext(host),
             CancellationToken.None);
-        string content = string.Join('\n', snapshot.Files.Select(file => file.Content));
+        string content = JsonSerializer.Serialize(snapshot.Values);
 
-        Assert.Contains("UserLibraryPath", content, StringComparison.Ordinal);
-        Assert.Contains("TemplatePath", content, StringComparison.Ordinal);
-        Assert.Contains("VST3Path", content, StringComparison.Ordinal);
+        Assert.Empty(snapshot.Files);
+        Assert.Contains("userlibrarypath", content, StringComparison.Ordinal);
+        Assert.Contains("templatepath", content, StringComparison.Ordinal);
+        Assert.Contains("vst3path", content, StringComparison.Ordinal);
         Assert.DoesNotContain(snapshot.Files, file =>
             file.LogicalPath.EndsWith(".als", StringComparison.OrdinalIgnoreCase) ||
             file.LogicalPath.Contains("Packs", StringComparison.OrdinalIgnoreCase));

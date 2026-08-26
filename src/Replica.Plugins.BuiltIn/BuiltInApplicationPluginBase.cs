@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Replica.Core.Plugins;
 
 namespace Replica.Plugins.BuiltIn;
@@ -135,62 +132,6 @@ public abstract class BuiltInApplicationPluginBase : BuiltInDeveloperPluginBase
         return warnings;
     }
 
-    protected static async Task AddJsonFileAsync(
-        PluginCaptureContext context,
-        string physicalPath,
-        string logicalPath,
-        ICollection<PluginCapturedFile> files,
-        ICollection<string> warnings,
-        bool redactUrlQueries,
-        CancellationToken cancellationToken)
-    {
-        bool exists = context.Host.FileExists(physicalPath);
-        PluginCapturedFile? captured = await CaptureFileAsync(
-            context.Host,
-            physicalPath,
-            logicalPath,
-            sanitizeJson: true,
-            cancellationToken).ConfigureAwait(false);
-        if (captured is null)
-        {
-            if (exists)
-            {
-                warnings.Add($"InvalidSettingsFile:{logicalPath.Replace('\\', '/')}");
-            }
-
-            return;
-        }
-
-        if (redactUrlQueries)
-        {
-            captured = captured with { Content = RedactUrlQueries(captured.Content) };
-        }
-
-        files.Add(captured);
-    }
-
-    protected static async Task AddTextFileAsync(
-        PluginCaptureContext context,
-        string physicalPath,
-        string logicalPath,
-        ICollection<PluginCapturedFile> files,
-        CancellationToken cancellationToken)
-    {
-        PluginCapturedFile? captured = await CaptureFileAsync(
-            context.Host,
-            physicalPath,
-            logicalPath,
-            sanitizeJson: false,
-            cancellationToken).ConfigureAwait(false);
-        if (captured is not null)
-        {
-            files.Add(captured with
-            {
-                Content = RedactTextUrlQueries(SanitizeTextContent(captured.Content)),
-            });
-        }
-    }
-
     protected static bool VersionMajorIs(string version, params int[] supportedMajors)
     {
         string digits = new(version
@@ -236,76 +177,6 @@ public abstract class BuiltInApplicationPluginBase : BuiltInDeveloperPluginBase
         catch (ArgumentException)
         {
             return false;
-        }
-    }
-
-    private static string RedactUrlQueries(string json)
-    {
-        try
-        {
-            JsonNode? root = JsonNode.Parse(json);
-            if (root is null)
-            {
-                return json;
-            }
-
-            RedactNode(root);
-            return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (JsonException)
-        {
-            return json;
-        }
-    }
-
-    private static string RedactTextUrlQueries(string content)
-    {
-        return Regex.Replace(
-            content,
-            @"https?://[^\s\""'<>]+",
-            static match =>
-            {
-                if (!Uri.TryCreate(match.Value, UriKind.Absolute, out Uri? uri) ||
-                    string.IsNullOrEmpty(uri.Query))
-                {
-                    return match.Value;
-                }
-
-                return new UriBuilder(uri) { Query = string.Empty }.Uri.ToString();
-            },
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromMilliseconds(100));
-    }
-
-    private static void RedactNode(JsonNode node)
-    {
-        if (node is JsonObject jsonObject)
-        {
-            foreach ((string key, JsonNode? child) in jsonObject.ToArray())
-            {
-                if (child is JsonValue value &&
-                    value.TryGetValue(out string? text) &&
-                    Uri.TryCreate(text, UriKind.Absolute, out Uri? uri) &&
-                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
-                    !string.IsNullOrEmpty(uri.Query))
-                {
-                    jsonObject[key] = new UriBuilder(uri) { Query = string.Empty }.Uri.ToString();
-                }
-                else if (child is not null)
-                {
-                    RedactNode(child);
-                }
-            }
-        }
-        else if (node is JsonArray array)
-        {
-            foreach (JsonNode? child in array)
-            {
-                if (child is not null)
-                {
-                    RedactNode(child);
-                }
-            }
         }
     }
 

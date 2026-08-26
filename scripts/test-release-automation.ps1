@@ -83,7 +83,34 @@ try {
         }
     }
 
-    Write-Host 'Release version, prerelease, and workflow syntax checks passed.'
+    $workflow = Get-Content -LiteralPath (Join-Path $repositoryRoot '.github\workflows\release.yml') -Raw
+    $windowsBuild = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\build-release.ps1') -Raw
+    $windowsTest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\test-installer.ps1') -Raw
+    $macBuild = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\build-macos-release.ps1') -Raw
+    $installer = Get-Content -LiteralPath (Join-Path $repositoryRoot 'installer\Replica.iss') -Raw
+    $releaseContracts = @{
+        'release workflow Windows stable signing gate' = @($workflow, 'A Stable release requires the protected Windows Authenticode signing identity.')
+        'release workflow Apple stable signing gate' = @($workflow, 'A Stable release requires Apple Developer ID signing and notarization credentials.', 'REPLICA_APPLE_DEVELOPER_ID_CERTIFICATE_SHA256', 'public certificate pin')
+        'release authorization uses protected default-branch dispatch and immutable downstream commit' = @($workflow, 'workflow_dispatch:', 'github.event.repository.default_branch', '-RequiredAncestorRef', 'git check-ref-format --branch', 'merge-base --is-ancestor', 'commit_sha: ${{ steps.version.outputs.commit_sha }}', 'ref: ${{ needs.build-windows.outputs.commit_sha }}', 'environment: release-signing', 'environment: release-publishing')
+        'release signing credentials are isolated on fresh runners' = @($workflow, 'Sign and package Windows on an isolated runner', 'Sign and notarize macOS (${{ matrix.architecture }}) on an isolated runner', 'Prepare self-contained Windows application without signing credentials', 'Prepare self-contained macOS application without signing credentials', 'UsePreparedPublish = $true', 'prepared-release.json', 'replicaExeSha256', 'replicaExecutableSha256')
+        'release workflow secret cleanup proves absence' = @($workflow, 'REPLICA_SIGNING_CERTIFICATE_THUMBPRINT', 'REPLICA_SIGNING_PFX_PATH', 'REPLICA_APPLE_KEYCHAIN_PATH', 'prove absence', 'remained after cleanup')
+        'Inno compiler artifact is authenticated before signing' = @($workflow, 'REPLICA_INNO_SETUP_TOOL_TREE_SHA256', 'REPLICA_INNO_SETUP_PUBLISHER_CERTIFICATE_SHA256', 'get-directory-tree-sha256.ps1', 'Inno Setup tool tree does not match', 'before exposing signing capability')
+        'Windows publisher certificate binding' = @($windowsBuild, 'ReplicaPublisherCertificateSha256', 'Get-CertificateSha256', 'UsePreparedPublish', 'prepared-release.json', 'reviewed digest manifest')
+        'Windows installer signer verification' = @($windowsTest, 'ExpectedSignerCertificateSha256')
+        'Inno Setup executable and uninstaller signing' = @($installer, 'SignTool=replica', 'SignedUninstaller=yes')
+        'macOS Developer ID hardened-runtime signing' = @($macBuild, 'codesign --force --deep --options runtime --timestamp')
+        'macOS notarization and stapling' = @($macBuild, 'notarytool', 'stapler validate', 'NotaryKeychainPath', 'UsePreparedPublish', 'prepared-release.json', 'reviewed digest manifest')
+    }
+    foreach ($contract in $releaseContracts.GetEnumerator()) {
+        $content = $contract.Value[0]
+        foreach ($marker in $contract.Value[1..($contract.Value.Count - 1)]) {
+            if (!$content.Contains($marker, [StringComparison]::Ordinal)) {
+                throw "Release contract '$($contract.Key)' is missing '$marker'."
+            }
+        }
+    }
+
+    Write-Host 'Release version, trust, prerelease, and workflow syntax checks passed.'
 }
 finally {
     $resolvedTemporaryRoot = [IO.Path]::GetFullPath($temporaryRoot)

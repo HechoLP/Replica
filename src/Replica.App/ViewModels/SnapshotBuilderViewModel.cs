@@ -14,7 +14,9 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
 {
     private readonly IAppVersionService appVersion;
     private readonly IPortableSnapshotDialogService dialogs;
+    private readonly IPortableSnapshotSettingsService portableSettings;
     private readonly ISnapshotHistoryService history;
+    private readonly IOfflineInstallerInspectionService installerInspection;
     private readonly IRecoveryDialogService recoveryDialogs;
     private readonly ReplicaUiSession session;
     private readonly ISnapshotSelectionEstimator estimator;
@@ -40,6 +42,10 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    private bool _hasCurrentEstimate;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
     private bool _isFinalApprovalChecked;
 
     [ObservableProperty]
@@ -48,6 +54,8 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SelectDestinationCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddOfflineInstallerCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveOfflineInstallerCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -63,6 +71,22 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
     private SelectedFolderRowViewModel? _selectedFolder;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveOfflineInstallerCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    private IReadOnlyList<OfflineInstallerRowViewModel> _offlineInstallers = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveOfflineInstallerCommand))]
+    private OfflineInstallerRowViewModel? _selectedOfflineInstaller;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddOfflineInstallerCommand))]
+    private string _installerProvenance = string.Empty;
+
+    [ObservableProperty]
+    private string _installerLicenseWarning = string.Empty;
+
+    [ObservableProperty]
     private IReadOnlyList<string> _sensitiveExclusions =
     [
         "TOKEN, SECRET, PASSWORD, KEY, CREDENTIAL, CONNECTION_STRING 값",
@@ -76,64 +100,87 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
         ReplicaUiSession session,
         ISnapshotWriter writer,
         ISnapshotSelectionEstimator estimator,
+        IOfflineInstallerInspectionService installerInspection,
         IAppVersionService appVersion,
         ISnapshotHistoryService history,
         IPortableSnapshotDialogService dialogs,
+        IPortableSnapshotSettingsService portableSettings,
         IRecoveryDialogService recoveryDialogs)
     {
         this.session = session;
         this.writer = writer;
         this.estimator = estimator;
+        this.installerInspection = installerInspection;
         this.appVersion = appVersion;
         this.history = history;
         this.dialogs = dialogs;
+        this.portableSettings = portableSettings;
         this.recoveryDialogs = recoveryDialogs;
         _categories = CreateCategories();
         foreach (SnapshotCategoryOptionViewModel category in _categories)
         {
             category.PropertyChanged += (_, _) =>
             {
-                IsFinalApprovalChecked = false;
-                EstimatedSizeText = "포함 카테고리가 변경되었습니다. 범위를 다시 검토하세요.";
+                InvalidateEstimate("포함 카테고리가 변경되었습니다. 예상 용량을 다시 계산하세요.");
             };
         }
     }
 
     public bool HasCurrentScan => session.LatestScan is not null;
 
+    public bool IsOfflineRecoveryPack => SnapshotType == SnapshotType.OfflineRecoveryPack;
+
+    public bool IsSnapshotTypeSupported => true;
+
     public void Configure(SnapshotType snapshotType)
     {
         SnapshotType = snapshotType;
         SelectedFolders = [];
         SelectedFolder = null;
+        OfflineInstallers = [];
+        SelectedOfflineInstaller = null;
+        InstallerProvenance = string.Empty;
+        InstallerLicenseWarning = string.Empty;
         IsEncryptionEnabled = false;
         IsFinalApprovalChecked = false;
+        HasCurrentEstimate = snapshotType == SnapshotType.Lightweight;
         ProgressPercentage = 0;
-        EstimatedSizeText = snapshotType == SnapshotType.Lightweight
-            ? "Lightweight Snapshot은 선택 파일을 포함하지 않습니다."
-            : "사용자가 선택한 폴더만 용량을 계산하고 포함합니다.";
-        StatusText = $"{GetTypeName(snapshotType)} 구성을 검토 중입니다. 최종 승인 전에는 생성하지 않습니다.";
+        EstimatedSizeText = snapshotType switch
+        {
+            SnapshotType.Lightweight => "Lightweight Snapshot은 선택 파일을 포함하지 않습니다.",
+            SnapshotType.Recovery => "사용자가 선택한 폴더만 용량을 계산하고 포함합니다.",
+            _ => "선택 폴더와 서명이 검증된 설치 파일의 용량을 계산합니다.",
+        };
+        StatusText = IsOfflineRecoveryPack
+            ? "출처를 입력하고 설치 파일을 선택하세요. Windows가 신뢰한 Authenticode 서명만 포함할 수 있습니다."
+            : $"{GetTypeName(snapshotType)} 구성을 검토 중입니다. 최종 승인 전에는 생성하지 않습니다.";
         OnPropertyChanged(nameof(HasCurrentScan));
+        OnPropertyChanged(nameof(IsOfflineRecoveryPack));
+        OnPropertyChanged(nameof(IsSnapshotTypeSupported));
         EstimateCommand.NotifyCanExecuteChanged();
+        AddOfflineInstallerCommand.NotifyCanExecuteChanged();
         CreateCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanSelectDestination))]
-    private void SelectDestination()
+    private async Task SelectDestinationAsync(CancellationToken cancellationToken)
     {
-        string? currentDirectory = string.IsNullOrWhiteSpace(DestinationPath)
-            ? null
-            : Path.GetDirectoryName(DestinationPath);
-        string? directory = dialogs.SelectFolder("Snapshot 저장 폴더 선택", currentDirectory);
-        if (directory is null)
+        await RunAsync(async () =>
         {
-            return;
-        }
+            string? currentDirectory = string.IsNullOrWhiteSpace(DestinationPath)
+                ? (await portableSettings.GetAsync(cancellationToken)).DefaultSnapshotDirectory
+                : Path.GetDirectoryName(DestinationPath);
+            string? directory = dialogs.SelectFolder("Snapshot 저장 폴더 선택", currentDirectory);
+            if (directory is null)
+            {
+                return;
+            }
 
-        DestinationPath = Path.Combine(
-            directory,
-            $"Replica-{SnapshotType}-{DateTime.Now:yyyyMMdd-HHmmss}.replica");
-        StatusText = "저장 위치를 선택했습니다. 기존 파일은 자동으로 덮어쓰지 않습니다.";
+            DestinationPath = Path.Combine(
+                directory,
+                $"Replica-{SnapshotType}-{DateTime.Now:yyyyMMdd-HHmmss}.replica");
+            StatusText = "저장 위치를 선택했습니다. 기존 파일은 자동으로 덮어쓰지 않습니다.";
+        }, "저장 위치 선택");
     }
 
     [RelayCommand(CanExecute = nameof(CanAddFolder))]
@@ -159,9 +206,84 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
             GetFolderCategoryName(category));
         SelectedFolders = [.. SelectedFolders, row];
         SelectedFolder = row;
-        EstimatedSizeText = "선택 폴더가 변경되었습니다. 예상 용량을 다시 계산하세요.";
-        IsFinalApprovalChecked = false;
+        InvalidateEstimate("선택 폴더가 변경되었습니다. 예상 용량을 다시 계산하세요.");
         RemoveSelectedFolderCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAddOfflineInstaller))]
+    private async Task AddOfflineInstallerAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(InstallerProvenance))
+        {
+            StatusText = "설치 파일을 추가하기 전에 공식 다운로드 주소나 구입 매체 등 출처를 입력하세요.";
+            return;
+        }
+
+        string? initialDirectory = SelectedOfflineInstaller is null
+            ? null
+            : Path.GetDirectoryName(SelectedOfflineInstaller.SourcePath);
+        string? installerPath = dialogs.SelectOfflineInstaller(initialDirectory);
+        if (installerPath is null || OfflineInstallers.Any(row =>
+                row.SourcePath.Equals(installerPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            StatusText = "설치 파일의 SHA-256과 Windows 게시자 서명을 확인하고 있습니다.";
+            OfflineInstallerInspection inspection = await installerInspection
+                .InspectAsync(installerPath, cancellationToken);
+            if (!inspection.CanInclude)
+            {
+                StatusText = inspection.SignatureStatus switch
+                {
+                    OfflineInstallerSignatureStatus.Unsigned =>
+                        "서명되지 않은 설치 파일은 Offline Recovery Pack에 넣을 수 없습니다.",
+                    OfflineInstallerSignatureStatus.Untrusted =>
+                        "Windows가 게시자 서명을 신뢰하지 않아 설치 파일을 추가하지 않았습니다.",
+                    _ => "게시자 인증서를 안전하게 확인하지 못해 설치 파일을 추가하지 않았습니다.",
+                };
+                return;
+            }
+
+            string extension = Path.GetExtension(inspection.SourcePath).ToLowerInvariant();
+            string archivePath = $"offline/installers/{Guid.NewGuid():N}{extension}";
+            ReplicaOfflineInstaller installer = new(
+                inspection.SourcePath,
+                archivePath,
+                inspection.DisplayName,
+                inspection.Version,
+                inspection.Architecture,
+                InstallerProvenance.Trim(),
+                string.IsNullOrWhiteSpace(InstallerLicenseWarning)
+                    ? null
+                    : InstallerLicenseWarning.Trim(),
+                inspection.Publisher,
+                inspection.PublisherCertificateSha256,
+                inspection.Sha256,
+                inspection.FileSize);
+            OfflineInstallerRowViewModel row = new(installer);
+            OfflineInstallers = [.. OfflineInstallers, row];
+            SelectedOfflineInstaller = row;
+            InstallerProvenance = string.Empty;
+            InstallerLicenseWarning = string.Empty;
+            InvalidateEstimate("설치 파일 목록이 변경되었습니다. 예상 용량을 다시 계산하세요.");
+            StatusText = "서명과 SHA-256을 확인한 설치 파일을 추가했습니다. 게시자와 출처를 검토하세요.";
+        }, "설치 파일 검증");
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveOfflineInstaller))]
+    private void RemoveOfflineInstaller()
+    {
+        if (SelectedOfflineInstaller is null)
+        {
+            return;
+        }
+
+        OfflineInstallers = OfflineInstallers.Where(row => row != SelectedOfflineInstaller).ToArray();
+        SelectedOfflineInstaller = OfflineInstallers.FirstOrDefault();
+        InvalidateEstimate("설치 파일 목록이 변경되었습니다. 예상 용량을 다시 계산하세요.");
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveFolder))]
@@ -174,8 +296,7 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
 
         SelectedFolders = SelectedFolders.Where(row => row != SelectedFolder).ToArray();
         SelectedFolder = SelectedFolders.FirstOrDefault();
-        EstimatedSizeText = "선택 폴더가 변경되었습니다. 예상 용량을 다시 계산하세요.";
-        IsFinalApprovalChecked = false;
+        InvalidateEstimate("선택 폴더가 변경되었습니다. 예상 용량을 다시 계산하세요.");
     }
 
     [RelayCommand(CanExecute = nameof(CanEstimate), IncludeCancelCommand = true)]
@@ -185,10 +306,11 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
         {
             ReplicaSelectionEstimate estimate = await estimator.EstimateAsync(
                 CreateSelectedFolders(),
-                [],
+                CreateOfflineInstallers(),
                 cancellationToken);
             EstimatedSizeText = $"포함 파일 {estimate.Files.Count:N0}개 · 예상 {FormatBytes(estimate.TotalSize)} · " +
                 $"제외 {estimate.Exclusions.Count:N0}개";
+            HasCurrentEstimate = true;
             StatusText = "예상 용량 계산을 완료했습니다. 민감 제외 목록과 저장 위치를 다시 검토하세요.";
         }, "예상 용량 계산");
     }
@@ -239,10 +361,9 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
                         request.DestinationPath,
                         password ?? [],
                         null,
-                        cancellationToken);
+                        CancellationToken.None);
                 }
-                catch (Exception exception) when (
-                    exception is not OperationCanceledException and not OutOfMemoryException)
+                catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
                     StatusText = "Snapshot은 생성했지만 기록 인덱스에 추가하지 못했습니다. 파일은 그대로 유지됩니다.";
                     return;
@@ -349,7 +470,7 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
                 0,
                 null,
                 CreateSelectedFolders(),
-                []),
+                CreateOfflineInstallers()),
             password is null ? null : new ReplicaSnapshotEncryptionOptions(password));
     }
 
@@ -395,6 +516,11 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
                 row.ArchivePath,
                 row.Category)).ToArray();
 
+    private IReadOnlyList<ReplicaOfflineInstaller> CreateOfflineInstallers() =>
+        SnapshotType == SnapshotType.OfflineRecoveryPack
+            ? OfflineInstallers.Select(row => row.Installer).ToArray()
+            : [];
+
     private bool IsCategorySelected(string id) => Categories.Any(category =>
         category.Id.Equals(id, StringComparison.Ordinal) && category.IsSelected);
 
@@ -411,7 +537,7 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText = $"{operationName}을 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = $"{operationName}을 안전하게 완료하지 못했습니다. 입력 경로와 사용 가능한 공간을 확인한 뒤 다시 시도하세요.";
         }
         finally
         {
@@ -421,14 +547,23 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
 
     private bool CanSelectDestination() => !IsBusy;
 
-    private bool CanAddFolder() => !IsBusy;
+    private bool CanAddFolder() => !IsBusy && SnapshotType != SnapshotType.Lightweight;
 
     private bool CanRemoveFolder() => SelectedFolder is not null && !IsBusy;
+
+    private bool CanAddOfflineInstaller() => !IsBusy &&
+        IsOfflineRecoveryPack &&
+        OfflineInstallers.Count < 100 &&
+        !string.IsNullOrWhiteSpace(InstallerProvenance);
+
+    private bool CanRemoveOfflineInstaller() => !IsBusy && SelectedOfflineInstaller is not null;
 
     private bool CanEstimate() => !IsBusy;
 
     private bool CanCreate() => !IsBusy &&
         IsFinalApprovalChecked &&
+        HasCurrentEstimate &&
+        (!IsOfflineRecoveryPack || OfflineInstallers.Count > 0) &&
         session.LatestScan is not null &&
         !string.IsNullOrWhiteSpace(DestinationPath) &&
         DestinationPath.EndsWith(".replica", StringComparison.OrdinalIgnoreCase);
@@ -444,6 +579,13 @@ public sealed partial class SnapshotBuilderViewModel : ObservableObject
     partial void OnIsEncryptionEnabledChanged(bool value)
     {
         IsFinalApprovalChecked = false;
+    }
+
+    private void InvalidateEstimate(string message)
+    {
+        HasCurrentEstimate = SnapshotType == SnapshotType.Lightweight;
+        IsFinalApprovalChecked = false;
+        EstimatedSizeText = message;
     }
 
     private static IReadOnlyList<SnapshotCategoryOptionViewModel> CreateCategories() =>
@@ -521,3 +663,45 @@ public sealed record SelectedFolderRowViewModel(
     string ArchivePath,
     ReplicaSelectedFolderCategory Category,
     string CategoryName);
+
+public sealed class OfflineInstallerRowViewModel
+{
+    public OfflineInstallerRowViewModel(ReplicaOfflineInstaller installer)
+    {
+        Installer = installer;
+    }
+
+    public ReplicaOfflineInstaller Installer { get; }
+
+    public string SourcePath => Installer.SourcePath;
+
+    public string DisplayName => Installer.DisplayName;
+
+    public string Version => Installer.Version ?? "알 수 없음";
+
+    public string Architecture => Installer.Architecture ?? "Unknown";
+
+    public string Publisher => Installer.Publisher ?? "확인 불가";
+
+    public string Provenance => Installer.Provenance;
+
+    public string LicenseWarning => Installer.LicenseWarning ?? "사용자가 배포·보관 조건을 직접 확인해야 합니다.";
+
+    public string Sha256 => Installer.ExpectedSha256 ?? string.Empty;
+
+    public string SizeText => FormatSize(Installer.ExpectedSize ?? 0);
+
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        double value = Math.Max(bytes, 0);
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+}

@@ -42,24 +42,40 @@ public sealed class ElevatedExecutorHost : IElevatedExecutorHost
     private readonly IRestoreJournal _journal;
     private readonly IElevatedPlanStore _planStore;
     private readonly IRestoreProgressReporter _progressReporter;
+    private readonly IElevatedActionConsentService _consent;
+    private readonly Func<bool> _isAdministrator;
 
     public ElevatedExecutorHost(
         IElevatedPlanStore planStore,
         IRestoreExecutor executor,
         IRestoreJournal journal,
-        IRestoreProgressReporter progressReporter)
+        IRestoreProgressReporter progressReporter,
+        IElevatedActionConsentService consent)
+        : this(planStore, executor, journal, progressReporter, consent, IsAdministrator)
+    {
+    }
+
+    internal ElevatedExecutorHost(
+        IElevatedPlanStore planStore,
+        IRestoreExecutor executor,
+        IRestoreJournal journal,
+        IRestoreProgressReporter progressReporter,
+        IElevatedActionConsentService consent,
+        Func<bool> isAdministrator)
     {
         _planStore = planStore;
         _executor = executor;
         _journal = journal;
         _progressReporter = progressReporter;
+        _consent = consent;
+        _isAdministrator = isAdministrator;
     }
 
     public async Task<int> RunAsync(
         ElevatedExecutorArguments arguments,
         CancellationToken cancellationToken)
     {
-        if (!IsAdministrator())
+        if (!_isAdministrator())
         {
             return 5;
         }
@@ -70,6 +86,11 @@ public sealed class ElevatedExecutorHost : IElevatedExecutorHost
                 arguments,
                 cancellationToken).ConfigureAwait(false);
             RestoreAction action = envelope.Plan.Actions[0];
+            if (!await _consent.ConfirmAsync(action, cancellationToken).ConfigureAwait(false))
+            {
+                return 1223;
+            }
+
             IEnumerable<KeyValuePair<string, FileRestoreRequest>> mappings =
                 envelope.FileRequests.Count == 1
                     ? [new KeyValuePair<string, FileRestoreRequest>(action.Id, envelope.FileRequests[0])]

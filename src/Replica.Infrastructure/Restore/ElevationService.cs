@@ -66,13 +66,25 @@ public sealed class ElevationService : IElevationService
 
 public sealed class ElevatedProcessLauncher : IElevatedProcessLauncher
 {
-    private static readonly TimeSpan MaximumExecutionTime = TimeSpan.FromMinutes(30);
+    private readonly Func<ProcessStartInfo, CancellationToken, Task<int>> _launchAndWait;
+
+    public ElevatedProcessLauncher()
+        : this(LaunchAndWaitAsync)
+    {
+    }
+
+    internal ElevatedProcessLauncher(
+        Func<ProcessStartInfo, CancellationToken, Task<int>> launchAndWait)
+    {
+        _launchAndWait = launchAndWait;
+    }
 
     public async Task<int> LaunchAsync(
         ElevatedPlanLaunchRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
         string executable = System.Environment.ProcessPath ??
             throw new InvalidOperationException("Replica executable path is unavailable.");
         ProcessStartInfo startInfo = new(executable)
@@ -92,36 +104,24 @@ public sealed class ElevatedProcessLauncher : IElevatedProcessLauncher
 
         try
         {
-            using Process process = Process.Start(startInfo) ??
-                throw new InvalidOperationException("The elevated Replica process could not start.");
-            using CancellationTokenSource timeout = new(MaximumExecutionTime);
-            using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken,
-                timeout.Token);
-            try
-            {
-                await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-
-                return -2;
-            }
-
-            return process.ExitCode;
+            // After the elevated child starts, it owns a possible machine mutation and the
+            // mandatory post-mutation journal commit. Parent cancellation must wait for that
+            // single bounded handler to cross its durable safety boundary instead of killing it.
+            return await _launchAndWait(startInfo, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Win32Exception exception) when (exception.NativeErrorCode == 1223)
         {
             return 1223;
         }
+    }
+
+    private static async Task<int> LaunchAndWaitAsync(
+        ProcessStartInfo startInfo,
+        CancellationToken safetyBoundaryToken)
+    {
+        using Process process = Process.Start(startInfo) ??
+            throw new InvalidOperationException("The elevated Replica process could not start.");
+        await process.WaitForExitAsync(safetyBoundaryToken).ConfigureAwait(false);
+        return process.ExitCode;
     }
 }

@@ -22,14 +22,22 @@
 AppId={#ReplicaAppId}
 AppName=Replica
 AppVersion={#ReplicaVersion}
+#ifdef ReplicaSigningEnabled
+AppVerName=Replica {#ReplicaVersion}
+#else
 AppVerName=Replica {#ReplicaVersion} (Unsigned)
+#endif
 AppPublisher=HechoLP
 AppPublisherURL={#ReplicaRepositoryUrl}
 AppSupportURL={#ReplicaRepositoryUrl}/issues
 AppUpdatesURL={#ReplicaReleasesUrl}
 VersionInfoVersion={#ReplicaFileVersion}
 VersionInfoCompany=HechoLP
+#ifdef ReplicaSigningEnabled
+VersionInfoDescription=Replica Windows installer
+#else
 VersionInfoDescription=Replica Windows installer (Unsigned)
+#endif
 VersionInfoProductName=Replica
 VersionInfoProductVersion={#ReplicaFileVersion}
 DefaultDirName={localappdata}\Programs\Replica
@@ -50,10 +58,19 @@ RestartApplications=no
 RestartIfNeededByRun=no
 ChangesAssociations=yes
 UsePreviousAppDir=yes
+#ifdef ReplicaSigningEnabled
+UninstallDisplayName=Replica {#ReplicaVersion}
+#else
 UninstallDisplayName=Replica {#ReplicaVersion} (Unsigned)
+#endif
 UninstallDisplayIcon={app}\Replica.exe
+#ifdef ReplicaSigningEnabled
+SignTool=replica
+SignedUninstaller=yes
+#else
 InfoBeforeFile=UNSIGNED.txt
 SignedUninstaller=no
+#endif
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"

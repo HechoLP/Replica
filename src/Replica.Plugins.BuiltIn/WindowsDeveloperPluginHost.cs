@@ -170,11 +170,22 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
         DeveloperToolQuery query,
         CancellationToken cancellationToken)
     {
-        (string executable, string[] arguments) = GetCommand(query);
+        (string executable, string[] arguments) = GetCommand(query, resolvedPythonLauncher: null);
         string? resolved = ResolveExecutable(executable);
         if (resolved is null)
         {
             return new DeveloperToolQueryResult(false, string.Empty);
+        }
+
+        if (query == DeveloperToolQuery.PythonPackages)
+        {
+            string? pythonLauncher = ResolveExecutable("py.exe");
+            if (pythonLauncher is null)
+            {
+                return new DeveloperToolQueryResult(false, string.Empty);
+            }
+
+            (_, arguments) = GetCommand(query, pythonLauncher);
         }
 
         ProcessStartInfo startInfo = new(resolved)
@@ -243,7 +254,9 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
             process.ExitCode == 0 ? [] : ["The developer tool query did not complete successfully."]);
     }
 
-    private static (string Executable, string[] Arguments) GetCommand(DeveloperToolQuery query)
+    private static (string Executable, string[] Arguments) GetCommand(
+        DeveloperToolQuery query,
+        string? resolvedPythonLauncher)
     {
         return query switch
         {
@@ -263,52 +276,69 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
                 ("npm.cmd", ["list", "--global", "--depth=0", "--json"]),
             DeveloperToolQuery.PythonInterpreters => ("py.exe", ["-0p"]),
             DeveloperToolQuery.PythonPackages =>
-                ("pwsh.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$items = @(); & py -0p | ForEach-Object { if ($_ -match '([A-Za-z]:[\\/].*python(?:\\.exe)?)\\s*$') { $path = $Matches[1]; if (Test-Path -LiteralPath $path -PathType Leaf) { $packages = & $path -m pip list --format=json 2>$null; if ($LASTEXITCODE -eq 0) { $items += [pscustomobject]@{ Interpreter = $path; Packages = ($packages | ConvertFrom-Json) } } } } }; $items | ConvertTo-Json -Compress -Depth 5"]),
+                ("pwsh.exe", [
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    BuildPythonPackageQuery(resolvedPythonLauncher),
+                ]),
             _ => throw new ArgumentOutOfRangeException(nameof(query), query, null),
         };
     }
 
+    private static string BuildPythonPackageQuery(string? resolvedPythonLauncher)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedPythonLauncher))
+        {
+            return "throw 'The trusted Python launcher path is unavailable.'";
+        }
+
+        string quotedLauncher = resolvedPythonLauncher.Replace("'", "''", StringComparison.Ordinal);
+        return $"$items = @(); & '{quotedLauncher}' -0p | ForEach-Object {{ if ($_ -match '([A-Za-z]:[\\/].*python(?:\\.exe)?)\\s*$') {{ $path = $Matches[1]; if (Test-Path -LiteralPath $path -PathType Leaf) {{ $packages = & $path -m pip list --format=json 2>$null; if ($LASTEXITCODE -eq 0) {{ $items += [pscustomobject]@{{ Interpreter = $path; Packages = ($packages | ConvertFrom-Json) }} }} }} }} }}; $items | ConvertTo-Json -Compress -Depth 5";
+    }
+
     private static string? ResolveExecutable(string executable)
     {
-        string? path = Environment.GetEnvironmentVariable("PATH");
-        if (path is null)
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string[] candidates = executable.ToLowerInvariant() switch
         {
-            return null;
-        }
+            "code.cmd" =>
+            [
+                Path.Combine(programFiles, "Microsoft VS Code", "bin", "code.cmd"),
+                Path.Combine(programFilesX86, "Microsoft VS Code", "bin", "code.cmd"),
+            ],
+            "git.exe" =>
+            [
+                Path.Combine(programFiles, "Git", "cmd", "git.exe"),
+                Path.Combine(programFiles, "Git", "bin", "git.exe"),
+                Path.Combine(programFilesX86, "Git", "cmd", "git.exe"),
+            ],
+            "pwsh.exe" =>
+            [
+                Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe"),
+                Path.Combine(
+                    windows,
+                    "System32",
+                    "WindowsPowerShell",
+                    "v1.0",
+                    "powershell.exe"),
+            ],
+            "node.exe" => [Path.Combine(programFiles, "nodejs", "node.exe")],
+            "npm.cmd" => [Path.Combine(programFiles, "nodejs", "npm.cmd")],
+            "py.exe" =>
+            [
+                Path.Combine(windows, "py.exe"),
+                Path.Combine(programFiles, "Python Launcher", "py.exe"),
+            ],
+            _ => [],
+        };
 
-        foreach (string segment in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            string candidate;
-            try
-            {
-                candidate = Path.Combine(segment.Trim(), executable);
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        if (executable.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            string windowsPowerShell = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                "System32",
-                "WindowsPowerShell",
-                "v1.0",
-                "powershell.exe");
-            if (File.Exists(windowsPowerShell))
-            {
-                return windowsPowerShell;
-            }
-        }
-
-        return null;
+        return candidates
+            .Where(Path.IsPathFullyQualified)
+            .FirstOrDefault(IsSafeFile);
     }
 
     private static string? FirstSafeFile(params string[] candidates)
@@ -441,7 +471,13 @@ public sealed class WindowsDeveloperPluginHost : IDeveloperPluginHost
     {
         try
         {
-            FileInfo file = new(Path.GetFullPath(path));
+            string fullPath = Path.GetFullPath(path);
+            if (fullPath.StartsWith("\\\\", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            FileInfo file = new(fullPath);
             return file.Exists && (file.Attributes & FileAttributes.ReparsePoint) == 0;
         }
         catch (Exception exception) when (

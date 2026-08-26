@@ -27,7 +27,7 @@ Assets include selected user files and settings, inventory privacy, snapshot enc
 | Command/argument injection | arbitrary code under user/admin token | typed actions, allow-listed executables, argument-list APIs, strict identity validation, no shell strings |
 | Elevation handoff tampering/replay | unauthorized admin mutations | ACL-restricted plan, digest, expiry, single-use token, session binding, independent validation and deletion |
 | TOCTOU path replacement | write through a newly introduced junction | revalidate resolved path and reparse state immediately before atomic operation |
-| Poisoned installer or update | arbitrary code execution | official repository pinning, HTTPS, checksum and signature display/verification, user consent, post-install rescan |
+| Poisoned installer or update | arbitrary code execution | official repository pinning, HTTPS, checksum, Authenticode chain and publisher-certificate pinning, user consent, post-install rescan; Offline Pack export never executes |
 | Overbroad settings plugin | secret capture or destructive restore | built-in allow-list, documented paths, secret inspection, code review, typed handlers, plugin capability declarations |
 | Sensitive logging | credential leakage in diagnostics | structured redacted logs, bounded process output, never log payloads/secrets/passwords |
 | Restore interruption | inconsistent machine state | pre-mutation journal, dependency graph, atomic writes, verification, partial result and rollback |
@@ -46,7 +46,7 @@ Assets include selected user files and settings, inventory privacy, snapshot enc
 
 ## Residual risk
 
-SHA-256 proves integrity against the declared snapshot manifest but does not prove the snapshot author's identity. Authenticated encryption protects stored contents but cannot protect a compromised endpoint while data is open. winget, Homebrew, and vendor installers remain external trust dependencies. The Mac Preview is ad-hoc signed and not notarized, so Gatekeeper and release-hash verification remain important. Some applications cannot be reproduced safely because their settings are undocumented or tied to hardware, accounts, licenses, or platform versions.
+SHA-256 proves integrity against the declared snapshot manifest but does not prove the snapshot author's identity. Authenticated encryption protects stored contents but cannot protect a compromised endpoint while data is open. Authenticode proves control of a trusted signing identity, not that an installer is bug-free or legally redistributable. winget, Homebrew, vendor installers, and platform trust services remain external dependencies. A prerelease may still be unsigned/ad-hoc when clearly marked, so release-hash verification remains important. Some applications cannot be reproduced safely because their settings are undocumented or tied to hardware, accounts, licenses, or platform versions.
 
 Replica must communicate these limits and use `Unsupported` or `ManualActionRequired` rather than guessing.
 

@@ -1,5 +1,6 @@
 using Replica.Core.Planning;
 using Replica.Core.Recovery;
+using Replica.Core.Snapshots;
 
 namespace Replica.Core.Services;
 
@@ -18,15 +19,18 @@ public interface IRecoveryWizardService
 
     Task<RecoveryWizardSession> ApprovePlanAsync(
         string sessionId,
+        string reviewedBindingSha256,
         CancellationToken cancellationToken);
 
     Task<RecoveryWizardSession> ExecuteAsync(
         string sessionId,
+        string reviewedBindingSha256,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken);
 
     Task<RecoveryWizardSession> RetryFailedAsync(
         string sessionId,
+        string reviewedBindingSha256,
         ReadOnlyMemory<char> password,
         CancellationToken cancellationToken);
 
@@ -47,6 +51,12 @@ public interface IRecoveryWizardService
     Task<RecoveryWizardSession> CancelAsync(
         string sessionId,
         CancellationToken cancellationToken);
+
+    Task<OfflineInstallerExportResult> ExportOfflineInstallersAsync(
+        string sessionId,
+        string destinationDirectory,
+        ReadOnlyMemory<char> password,
+        CancellationToken cancellationToken);
 }
 
 public interface IRecoveryWizardRuntime
@@ -65,6 +75,8 @@ public interface IRecoveryWizardRuntime
     Task<RecoveryExecutionBatch> ExecuteAsync(
         string sessionId,
         string snapshotPath,
+        Guid expectedSnapshotId,
+        string expectedSnapshotSha256,
         RestorePlan approvedPlan,
         IReadOnlyList<RecoveryPathMapping> mappings,
         IReadOnlySet<string> completedActionIds,
@@ -74,8 +86,14 @@ public interface IRecoveryWizardRuntime
 
     Task<RecoveryVerificationResult> VerifyAsync(
         string snapshotPath,
+        Guid expectedSnapshotId,
+        string expectedSnapshotSha256,
         IReadOnlyList<RecoveryPathMapping> mappings,
         ReadOnlyMemory<char> password,
+        CancellationToken cancellationToken);
+
+    Task<bool> CleanupPayloadAsync(
+        string sessionId,
         CancellationToken cancellationToken);
 }
 

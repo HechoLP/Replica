@@ -44,6 +44,7 @@ public sealed class CompleteUiViewModelTests
         session.LatestScan = CreateScan();
         viewModel.Configure(SnapshotType.Recovery);
         viewModel.AddSelectedFolderCommand.Execute(ReplicaSelectedFolderCategory.GameSave);
+        await viewModel.EstimateCommand.ExecuteAsync(null);
         viewModel.DestinationPath = @"C:\Snapshots\recovery.replica";
         viewModel.IsFinalApprovalChecked = true;
 
@@ -52,6 +53,38 @@ public sealed class CompleteUiViewModelTests
         ReplicaSelectedFolder folder = Assert.Single(writer.Request!.Recovery.SelectedFolders);
         Assert.Equal(portableDialogs.Folder, folder.SourcePath);
         Assert.Equal(ReplicaSelectedFolderCategory.GameSave, folder.Category);
+    }
+
+    [Fact]
+    public async Task SnapshotBuilder_RecoveryRequiresCurrentEstimateAndOfflinePackRequiresVerifiedInstaller()
+    {
+        FakeSnapshotWriter writer = new();
+        FakePortableDialogs dialogs = new() { Installer = @"C:\Downloads\Setup-x64.exe" };
+        SnapshotBuilderViewModel viewModel = CreateBuilder(writer, out ReplicaUiSession session, dialogs);
+        session.LatestScan = CreateScan();
+        viewModel.Configure(SnapshotType.Recovery);
+        viewModel.DestinationPath = @"C:\Snapshots\recovery.replica";
+        viewModel.IsFinalApprovalChecked = true;
+
+        Assert.False(viewModel.CreateCommand.CanExecute(null));
+
+        viewModel.Configure(SnapshotType.OfflineRecoveryPack);
+        viewModel.DestinationPath = @"C:\Snapshots\offline.replica";
+        viewModel.IsFinalApprovalChecked = true;
+
+        Assert.True(viewModel.IsOfflineRecoveryPack);
+        Assert.False(viewModel.CreateCommand.CanExecute(null));
+
+        viewModel.InstallerProvenance = "https://vendor.example/download";
+        await viewModel.AddOfflineInstallerCommand.ExecuteAsync(null);
+        await viewModel.EstimateCommand.ExecuteAsync(null);
+        viewModel.IsFinalApprovalChecked = true;
+        await viewModel.CreateCommand.ExecuteAsync(null);
+
+        ReplicaOfflineInstaller installer = Assert.Single(writer.Request!.Recovery.OfflineInstallers);
+        Assert.Equal(dialogs.Installer, installer.SourcePath);
+        Assert.Equal(new string('B', 64), installer.ExpectedSha256);
+        Assert.Equal("CN=Trusted Vendor", installer.Publisher);
     }
 
     [Fact]
@@ -66,6 +99,23 @@ public sealed class CompleteUiViewModelTests
 
         Assert.False(viewModel.IsFinalApprovalChecked);
         Assert.False(viewModel.CreateCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SnapshotBuilder_DestinationPickerUsesPersistedDefaultDirectory()
+    {
+        FakePortableDialogs dialogs = new() { Folder = @"D:\Replica" };
+        FakePortableSettings settings = new() { DefaultDirectory = @"D:\Backups" };
+        SnapshotBuilderViewModel viewModel = CreateBuilder(
+            new FakeSnapshotWriter(),
+            out _,
+            dialogs,
+            settings);
+
+        await viewModel.SelectDestinationCommand.ExecuteAsync(null);
+
+        Assert.Equal(settings.DefaultDirectory, dialogs.LastInitialDirectory);
+        Assert.StartsWith(dialogs.Folder, viewModel.DestinationPath, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -101,41 +151,40 @@ public sealed class CompleteUiViewModelTests
     }
 
     [Fact]
-    public async Task Settings_SaveAppliesThemeLanguageAndUpdateChannel()
+    public async Task Settings_SaveAppliesThemeAndUpdateChannel()
     {
         FakeThemeService themes = new();
-        FakeLanguageService languages = new();
         FakeUpdatePreferences updates = new();
         SettingsViewModel viewModel = new(
             themes,
-            languages,
             new FakePortableSettings(),
             updates,
             new FakePortableDialogs());
         viewModel.SelectedTheme = ThemeMode.Dark;
-        viewModel.SelectedLanguage = viewModel.Languages.Single(option => option.Code == "en-US");
         viewModel.UpdateChannel = UpdateChannel.Beta;
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         Assert.Equal(ThemeMode.Dark, themes.CurrentTheme);
-        Assert.Equal("en-US", languages.CurrentLanguageCode);
         Assert.Equal(UpdateChannel.Beta, updates.Preference.Channel);
     }
 
     private static SnapshotBuilderViewModel CreateBuilder(
         FakeSnapshotWriter writer,
         out ReplicaUiSession session,
-        FakePortableDialogs? portableDialogs = null)
+        FakePortableDialogs? portableDialogs = null,
+        FakePortableSettings? portableSettings = null)
     {
         session = new ReplicaUiSession();
         return new SnapshotBuilderViewModel(
             session,
             writer,
             new FakeEstimator(),
+            new FakeOfflineInstallerInspectionService(),
             new FakeAppVersionService(),
             new FakeHistoryService(),
             portableDialogs ?? new FakePortableDialogs(),
+            portableSettings ?? new FakePortableSettings(),
             new FakeRecoveryDialogs());
     }
 
@@ -231,16 +280,49 @@ public sealed class CompleteUiViewModelTests
     {
         public string? Folder { get; set; }
 
+        public string? Installer { get; set; }
+
+        public string? LastInitialDirectory { get; private set; }
+
         public string? SelectSnapshot() => null;
 
-        public string? SelectFolder(string title, string? initialDirectory) => Folder;
+        public string? SelectFolder(string title, string? initialDirectory)
+        {
+            LastInitialDirectory = initialDirectory;
+            return Folder;
+        }
 
         public bool ConfirmInstallerDownload(string destinationDirectory, string versionDescription) => false;
+
+        public string? SelectOfflineInstaller(string? initialDirectory) => Installer;
+    }
+
+    private sealed class FakeOfflineInstallerInspectionService : IOfflineInstallerInspectionService
+    {
+        public Task<OfflineInstallerInspection> InspectAsync(
+            string installerPath,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new OfflineInstallerInspection(
+                installerPath,
+                "Example Setup",
+                "1.0",
+                "x64",
+                1234,
+                new string('B', 64),
+                OfflineInstallerSignatureStatus.Trusted,
+                "CN=Trusted Vendor",
+                new string('C', 64),
+                "Trusted"));
+        }
     }
 
     private sealed class FakeRecoveryDialogs : IRecoveryDialogService
     {
         public string? SelectRecoverySnapshot() => null;
+
+        public string? SelectOfflineInstallerExportFolder() => null;
 
         public char[]? RequestPassword(string title, string message) => null;
 
@@ -291,7 +373,10 @@ public sealed class CompleteUiViewModelTests
 
     private sealed class FakePortableSettings : IPortableSnapshotSettingsService
     {
-        public Task<PortableSnapshotSettings> GetAsync(CancellationToken cancellationToken) => Task.FromResult(new PortableSnapshotSettings(null));
+        public string? DefaultDirectory { get; set; }
+
+        public Task<PortableSnapshotSettings> GetAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new PortableSnapshotSettings(DefaultDirectory));
 
         public Task SaveDefaultDirectoryAsync(string directoryPath, CancellationToken cancellationToken) => Task.CompletedTask;
     }

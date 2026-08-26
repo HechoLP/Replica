@@ -136,7 +136,7 @@ public sealed partial class RestoreDryRunViewModel : ObservableObject
             FormatBytes(action.EstimatedDownloadBytes),
             action.IsSelected ? "선택" : "미선택",
             action.IsManualOnly ? "수동" : "자동화 지원",
-            action.ReasonCode);
+            ReasonCodePresenter.GetText(action.ReasonCode));
     }
 
     private static string GetActionTypeName(RestoreActionType type)

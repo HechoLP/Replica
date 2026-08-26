@@ -5,7 +5,7 @@
   "running": false,
   "files": {
     "{AppData}/obs-studio/global.ini": "[Basic]\nProfile=Streaming\nSceneCollection=Main\nStreamKey=TOP_SECRET\n",
-    "{AppData}/obs-studio/basic/scenes/Main.json": "{\"name\":\"Main\",\"hotkeys\":{\"OBSBasic.StartStreaming\":[{\"key\":\"OBS_KEY_F9\"}]},\"source\":{\"url\":\"https://example.invalid/overlay?token=TOP_SECRET&viewer=1\",\"cookie\":\"TOP_SECRET\"}}",
+    "{AppData}/obs-studio/basic/scenes/Main.json": "{\"name\":\"Main\",\"hotkeys\":{\"OBSBasic.StartStreaming\":[{\"key\":\"OBS_KEY_F9\"}]},\"source\":{\"key\":\"OPAQUE_CREDENTIAL_48391\",\"url\":\"https://example.invalid/overlay?token=TOP_SECRET&viewer=1\",\"cookie\":\"TOP_SECRET\"}}",
     "{AppData}/obs-studio/basic/profiles/Streaming/basic.ini": "[Audio]\nSampleRate=48000\n[Video]\nBaseCX=1920\nBaseCY=1080\n",
     "{AppData}/obs-studio/basic/profiles/Streaming/service.json": "{\"streamKey\":\"TOP_SECRET\",\"serviceToken\":\"TOP_SECRET\"}",
     "{AppData}/obs-studio/plugin_config/obs-browser/Cookies": "TOP_SECRET"

@@ -234,6 +234,56 @@ public sealed class RollbackJournalServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ExposesExactFileTargetAndRollbackEffect()
+    {
+        string destinationRoot = CreateDirectory("preview-destination");
+        string destination = Path.Combine(destinationRoot, "created.txt");
+        RollbackJournalService service = CreateService();
+        RestoreAction action = FileAction("preview-file");
+        await PrepareAsync(
+            service,
+            "preview-file-session",
+            action,
+            FileRequest(destinationRoot, destination, "created"));
+        File.WriteAllText(destination, "created", Encoding.UTF8);
+        await MarkVerifiedAsync(service, "preview-file-session", action.Id, destination);
+
+        RollbackPreviewItem item = Assert.Single((await service.CreatePlanAsync(
+            "preview-file-session",
+            null,
+            CancellationToken.None)).Items);
+
+        Assert.Equal(destination, item.Target);
+        Assert.Contains("삭제", item.Effect, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(item.ExpectedCurrentSha256));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectsApprovedPreviewWhoseConcreteTargetWasChanged()
+    {
+        _environment.Set("BOUND_SETTING", "before", EnvironmentVariableScope.User);
+        RollbackJournalService service = CreateService();
+        RestoreAction action = EnvironmentAction("bound", "BOUND_SETTING", "after", false);
+        await PrepareAsync(service, "bound-session", action);
+        _environment.Set("BOUND_SETTING", "after", EnvironmentVariableScope.User);
+        await MarkVerifiedAsync(service, "bound-session", action.Id);
+        RollbackPlan pending = await service.CreatePlanAsync(
+            "bound-session",
+            null,
+            CancellationToken.None);
+        RollbackPlan changed = pending with
+        {
+            Items = [pending.Items[0] with { Target = "User 환경 변수 · DIFFERENT_SETTING" }],
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ExecuteAsync(
+            changed.Approve(),
+            null,
+            CancellationToken.None));
+        Assert.Equal("after", _environment.Get("BOUND_SETTING", EnvironmentVariableScope.User));
+    }
+
+    [Fact]
     public async Task RecordBeforeMutationAsync_NeverCapturesSensitiveEnvironmentValue()
     {
         _environment.Set("SERVICE_API_TOKEN", "do-not-store", EnvironmentVariableScope.User);

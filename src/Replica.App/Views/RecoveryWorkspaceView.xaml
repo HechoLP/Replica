@@ -14,7 +14,7 @@
                         </StackPanel>
                         <Button Grid.Column="1" Padding="14,8" Command="{Binding CancelCommand}" Content="복구 취소" />
                     </Grid>
-                    <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding Steps}">
+                    <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding Phases}">
                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate><DataTemplate><Border Margin="0,0,7,7" Padding="8,5" Background="{DynamicResource BadgeBackgroundBrush}" CornerRadius="7"><TextBlock><Run Text="{Binding Number}" /><Run Text=". " /><Run Text="{Binding Name}" /><Run Text=" · " /><Run FontWeight="SemiBold" Text="{Binding State}" /></TextBlock></Border></DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -28,12 +28,19 @@
             <Border Style="{DynamicResource PageCardStyle}">
                 <StackPanel>
                     <TextBlock AutomationProperties.HeadingLevel="Level2" FontSize="18" FontWeight="SemiBold" Text="드라이브 경로 매핑과 파일 충돌" />
-                    <DataGrid Margin="0,10,0,0" MaxHeight="220" AutoGenerateColumns="False" CanUserAddRows="False" ItemsSource="{Binding PathMappings}" AutomationProperties.Name="복구 경로 매핑">
+                    <DataGrid Margin="0,10,0,0" MaxHeight="220" AutoGenerateColumns="False" CanUserAddRows="False" IsEnabled="{Binding CanAnalyze}" ItemsSource="{Binding PathMappings}" AutomationProperties.Name="복구 경로 매핑">
                         <DataGrid.Columns>
                             <DataGridTextColumn Width="220" Header="원본 경로" Binding="{Binding SourcePath}" IsReadOnly="True" />
                             <DataGridTextColumn Width="*" Header="새 경로" Binding="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" />
                             <DataGridTextColumn Width="100" Header="적용 대상" Binding="{Binding Scope}" IsReadOnly="True" />
-                            <DataGridTextColumn Width="180" Header="충돌 처리" Binding="{Binding ConflictBehavior}" />
+                            <DataGridTemplateColumn Width="180" Header="같은 파일이 있을 때">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding ConflictBehavior}" /></DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate><ComboBox ItemsSource="{Binding ConflictBehaviorOptions}" SelectedItem="{Binding ConflictBehavior, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Width="120" Header="예상 용량" Binding="{Binding EstimatedBytes}" IsReadOnly="True" />
                         </DataGrid.Columns>
                     </DataGrid>
@@ -60,20 +67,23 @@
                             <DataGridTextColumn Width="220" Header="설명" Binding="{Binding Description}" />
                         </DataGrid.Columns>
                     </DataGrid>
+                    <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryTextBrush}" Text="아직 복원 계획이 없습니다. 현재 PC 검사·차이 분석을 먼저 실행하세요.">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding PlanActions.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
                     <WrapPanel>
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding AnalyzeCommand}" Content="현재 PC 검사·차이 분석" IsEnabled="{Binding CanAnalyze}" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ApprovePlanCommand}" Content="Restore Plan 최종 승인" IsEnabled="{Binding CanApprovePlan}" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ExecuteCommand}" Content="승인 작업 실행" IsEnabled="{Binding CanExecute}" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding RetryFailedCommand}" Content="실패 작업 재시도" IsEnabled="{Binding CanRetry}" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ApproveRestartCommand}" Content="로그인 후 재개 등록" IsEnabled="{Binding CanApproveRestart}" />
-                        <Button Style="{DynamicResource SecondaryActionButtonStyle}" Command="{Binding ConfirmResumeCommand}" Content="재부팅 후 계속" IsEnabled="{Binding CanConfirmResume}" />
+                        <Button Command="{Binding AnalyzeCommand}" Content="현재 PC 검사·차이 분석"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanAnalyze}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                        <Button Command="{Binding ApprovePlanCommand}" Content="복원 계획 최종 승인"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanApprovePlan}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                        <Button Command="{Binding ExecuteCommand}" Content="승인 작업 실행"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanExecute}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                        <Button Command="{Binding RetryFailedCommand}" Content="실패 작업 다시 시도"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanRetry}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                        <Button Command="{Binding ApproveRestartCommand}" Content="로그인 후 재개 등록"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanApproveRestart}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                        <Button Command="{Binding ConfirmResumeCommand}" Content="재부팅 후 결과 확인"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CanConfirmResume}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
                     </WrapPanel>
                 </StackPanel>
             </Border>
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Style="{DynamicResource PageCardStyle}"><StackPanel><TextBlock FontWeight="SemiBold" Text="실행 결과" /><DataGrid Margin="0,8,0,0" MaxHeight="220" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding ActionResults}"><DataGrid.Columns><DataGridTextColumn Width="*" Header="작업" Binding="{Binding ActionId}" /><DataGridTextColumn Width="110" Header="상태" Binding="{Binding State}" /><DataGridTextColumn Width="*" Header="메시지" Binding="{Binding Message}" /></DataGrid.Columns></DataGrid></StackPanel></Border>
-                <Border Grid.Column="2" Style="{DynamicResource PageCardStyle}"><StackPanel><TextBlock FontWeight="SemiBold" Text="수동 작업" /><ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ManualActions}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Margin="0,0,0,7" Text="{Binding Guidance}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="로그인·라이선스·SSH 개인키·유료 플러그인은 Replica가 우회하거나 자동 복원하지 않습니다." TextWrapping="Wrap" /></StackPanel></Border>
+                <Border Grid.Column="0" Style="{DynamicResource PageCardStyle}"><StackPanel><TextBlock FontWeight="SemiBold" Text="실행 결과" /><DataGrid Margin="0,8,0,0" MaxHeight="220" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" ItemsSource="{Binding ActionResults}"><DataGrid.Columns><DataGridTextColumn Width="*" Header="작업" Binding="{Binding ActionId}" /><DataGridTextColumn Width="110" Header="상태" Binding="{Binding State}" /><DataGridTextColumn Width="*" Header="메시지" Binding="{Binding Message}" /></DataGrid.Columns></DataGrid><TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="아직 실행 결과가 없습니다."><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding ActionResults.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></StackPanel></Border>
+                <Border Grid.Column="2" Style="{DynamicResource PageCardStyle}"><StackPanel><TextBlock FontWeight="SemiBold" Text="수동 작업" /><ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ManualActions}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,0,0,9"><TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextWrapping="Wrap" /><TextBlock Margin="0,3,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding Guidance}" TextWrapping="Wrap" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><TextBlock Margin="0,4,0,7" Foreground="{DynamicResource SecondaryTextBrush}" Text="현재 표시할 수동 작업이 없습니다."><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding ManualActions.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><Button Margin="0,4,0,8" HorizontalAlignment="Left" Command="{Binding ExportOfflineInstallersCommand}" Content="검증된 설치 파일 내보내기"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryActionButtonStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasOfflineInstallers}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style></Button><TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="로그인·라이선스·SSH 개인키·유료 플러그인은 Replica가 우회하거나 자동 복원하지 않습니다." TextWrapping="Wrap" /></StackPanel></Border>
             </Grid>
         </StackPanel>
     </ScrollViewer>

@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using Replica.Core.Snapshots;
 using Replica.Infrastructure.Snapshots;
 
@@ -81,6 +83,7 @@ public sealed class ReplicaSnapshotRoundTripTests
     {
         using SnapshotTestContext context = new();
         string installer = context.CreateFile("inputs/setup.exe", "offline installer bytes");
+        byte[] installerBytes = await File.ReadAllBytesAsync(installer);
         string destination = Path.Combine(context.RootPath, "offline.replica");
         ReplicaOfflineInstaller offlineInstaller = new(
             installer,
@@ -89,7 +92,11 @@ public sealed class ReplicaSnapshotRoundTripTests
             "1.0",
             "x64",
             "Vendor download",
-            "Review redistribution terms.");
+            "Review redistribution terms.",
+            "CN=Example Publisher",
+            new string('A', 64),
+            Convert.ToHexString(SHA256.HashData(installerBytes)),
+            installerBytes.Length);
         ReplicaSnapshotWriteRequest request = context.CreateRequest(
             destination,
             SnapshotType.OfflineRecoveryPack,
@@ -104,6 +111,40 @@ public sealed class ReplicaSnapshotRoundTripTests
         Assert.Equal(SnapshotType.OfflineRecoveryPack, result.Manifest.SnapshotType);
         Assert.Contains("files/offline/setup.exe", result.EntryPaths);
         Assert.Single(result.Recovery.OfflineInstallers);
+    }
+
+    [Fact]
+    public async Task OfflineRecoveryPackStopsIfInstallerChangesAfterReview()
+    {
+        using SnapshotTestContext context = new();
+        string installer = context.CreateFile("inputs/reviewed.exe", "reviewed bytes");
+        byte[] reviewedBytes = await File.ReadAllBytesAsync(installer);
+        ReplicaOfflineInstaller reviewed = new(
+            installer,
+            "offline/reviewed.exe",
+            "Reviewed Setup",
+            "1.0",
+            "x64",
+            "Official vendor download",
+            null,
+            "CN=Example Publisher",
+            new string('A', 64),
+            Convert.ToHexString(SHA256.HashData(reviewedBytes)),
+            reviewedBytes.Length);
+        await File.WriteAllTextAsync(installer, "changed after review");
+        string destination = Path.Combine(context.RootPath, "changed.replica");
+
+        ReplicaSnapshotException exception = await Assert.ThrowsAsync<ReplicaSnapshotException>(() =>
+            context.CreateWriter().WriteAsync(
+                context.CreateRequest(
+                    destination,
+                    SnapshotType.OfflineRecoveryPack,
+                    offlineInstallers: [reviewed]),
+                progress: null,
+                CancellationToken.None));
+
+        Assert.Contains("changed after publisher", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(destination));
     }
 
     [Fact]
@@ -168,5 +209,26 @@ public sealed class ReplicaSnapshotRoundTripTests
             () => context.CreateWriter().WriteAsync(request, progress: null, CancellationToken.None));
 
         Assert.Equal("original", await File.ReadAllTextAsync(destination));
+    }
+
+    [Fact]
+    public async Task ReaderRejectsOversizedCentralDirectoryCountBeforeZipArchiveMaterialization()
+    {
+        using SnapshotTestContext context = new();
+        string snapshotPath = Path.Combine(context.RootPath, "too-many-entries.replica");
+        byte[] endRecord = new byte[22];
+        BinaryPrimitives.WriteUInt32LittleEndian(endRecord, 0x06054B50);
+        BinaryPrimitives.WriteUInt16LittleEndian(endRecord.AsSpan(8), 10_001);
+        BinaryPrimitives.WriteUInt16LittleEndian(endRecord.AsSpan(10), 10_001);
+        BinaryPrimitives.WriteUInt32LittleEndian(endRecord.AsSpan(12), 1);
+        await File.WriteAllBytesAsync(snapshotPath, endRecord);
+
+        ReplicaSnapshotException exception = await Assert.ThrowsAsync<ReplicaSnapshotException>(() =>
+            context.CreateReader().ReadAsync(
+                new ReplicaSnapshotReadRequest(snapshotPath),
+                progress: null,
+                CancellationToken.None));
+
+        Assert.Contains("central directory", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

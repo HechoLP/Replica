@@ -9,7 +9,19 @@ param(
     [string] $Architecture,
 
     [Parameter()]
-    [string] $OutputDirectory = 'artifacts/macos-release'
+    [string] $OutputDirectory = 'artifacts/macos-release',
+
+    [Parameter()]
+    [string] $SigningIdentity,
+
+    [Parameter()]
+    [string] $NotaryKeychainProfile,
+
+    [Parameter()]
+    [string] $NotaryKeychainPath,
+
+    [Parameter()]
+    [switch] $UsePreparedPublish
 )
 
 Set-StrictMode -Version Latest
@@ -17,6 +29,20 @@ $ErrorActionPreference = 'Stop'
 
 if (!$IsMacOS) {
     throw 'macOS release packages must be built on macOS.'
+}
+if (![string]::IsNullOrWhiteSpace($NotaryKeychainProfile) -and
+    [string]::IsNullOrWhiteSpace($SigningIdentity)) {
+    throw 'Notarization requires an Apple Developer ID Application signing identity.'
+}
+if (![string]::IsNullOrWhiteSpace($NotaryKeychainPath) -and
+    [string]::IsNullOrWhiteSpace($NotaryKeychainProfile)) {
+    throw 'A notarization keychain path requires a notarization profile.'
+}
+if (![string]::IsNullOrWhiteSpace($NotaryKeychainPath)) {
+    $NotaryKeychainPath = [IO.Path]::GetFullPath($NotaryKeychainPath)
+    if (!(Test-Path -LiteralPath $NotaryKeychainPath -PathType Leaf)) {
+        throw "The notarization keychain does not exist: $NotaryKeychainPath"
+    }
 }
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -89,7 +115,7 @@ function Assert-BundleContract {
     }
 }
 
-foreach ($directory in @($workRoot, $resolvedOutput)) {
+foreach ($directory in @($resolvedOutput)) {
     $resolvedDirectory = [IO.Path]::GetFullPath($directory)
     if (!$resolvedDirectory.StartsWith($artifactRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) {
         throw 'Refusing to clean a directory outside artifacts.'
@@ -100,22 +126,52 @@ foreach ($directory in @($workRoot, $resolvedOutput)) {
     New-Item -ItemType Directory -Path $resolvedDirectory | Out-Null
 }
 
-& dotnet publish (Join-Path $repositoryRoot 'src/Replica.Mac/Replica.Mac.csproj') `
-    -c Release `
-    -r $runtimeIdentifier `
-    --self-contained true `
-    -o $publishDirectory `
-    -p:Version=$Version `
-    -p:InformationalVersion=$Version `
-    -p:PublishSingleFile=true `
-    -p:PublishTrimmed=false
-if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed for $runtimeIdentifier."
+if (!$UsePreparedPublish) {
+    if (Test-Path -LiteralPath $workRoot) {
+        Remove-Item -LiteralPath $workRoot -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $workRoot | Out-Null
+}
+elseif (!(Test-Path -LiteralPath (Join-Path $publishDirectory 'Replica') -PathType Leaf)) {
+    throw 'The prepared macOS publish output is missing Replica.'
+}
+
+if (Test-Path -LiteralPath $bundleRoot) {
+    Remove-Item -LiteralPath $bundleRoot -Recurse -Force
+}
+New-Item -ItemType Directory -Path $bundleRoot | Out-Null
+
+if (!$UsePreparedPublish) {
+    & dotnet publish (Join-Path $repositoryRoot 'src/Replica.Mac/Replica.Mac.csproj') `
+        -c Release `
+        -r $runtimeIdentifier `
+        --self-contained true `
+        -o $publishDirectory `
+        -p:Version=$Version `
+        -p:InformationalVersion=$Version `
+        -p:PublishSingleFile=true `
+        -p:PublishTrimmed=false
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet publish failed for $runtimeIdentifier."
+    }
 }
 
 $publishedExecutable = Join-Path $publishDirectory 'Replica'
 if (!(Test-Path -LiteralPath $publishedExecutable -PathType Leaf)) {
     throw 'The published macOS executable is missing.'
+}
+if ($UsePreparedPublish) {
+    $preparedManifestPath = Join-Path $publishDirectory 'prepared-release.json'
+    if (!(Test-Path -LiteralPath $preparedManifestPath -PathType Leaf)) {
+        throw 'The credential-free macOS publish manifest is missing.'
+    }
+    $preparedManifest = Get-Content -LiteralPath $preparedManifestPath -Raw | ConvertFrom-Json
+    $preparedHash = (Get-FileHash -LiteralPath $publishedExecutable -Algorithm SHA256).Hash
+    if ($preparedManifest.version -ne $Version -or
+        $preparedManifest.architecture -ne $Architecture -or
+        $preparedManifest.replicaExecutableSha256 -ne $preparedHash) {
+        throw 'The prepared macOS application does not match its reviewed digest manifest.'
+    }
 }
 
 New-Item -ItemType Directory -Path $macOsDirectory -Force | Out-Null
@@ -136,14 +192,30 @@ if ($LASTEXITCODE -ne 0) {
     throw 'The Replica executable could not be marked executable.'
 }
 
-# This is an ad-hoc integrity signature, not an Apple Developer ID signature or notarization.
-& codesign --force --deep --sign '-' $appBundle
-if ($LASTEXITCODE -ne 0) {
-    throw 'Ad-hoc signing of Replica.app failed.'
+$isDeveloperIdSigned = ![string]::IsNullOrWhiteSpace($SigningIdentity)
+if ($isDeveloperIdSigned) {
+    & codesign --force --deep --options runtime --timestamp --sign $SigningIdentity $appBundle
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Developer ID signing of Replica.app failed.'
+    }
+}
+else {
+    # Pull-request and prerelease builds may use an ad-hoc integrity signature.
+    & codesign --force --deep --sign '-' $appBundle
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Ad-hoc signing of Replica.app failed.'
+    }
 }
 & codesign --verify --deep --strict $appBundle
 if ($LASTEXITCODE -ne 0) {
     throw 'Replica.app failed code-signature verification.'
+}
+if ($isDeveloperIdSigned) {
+    $signatureDetails = (& codesign --display --verbose=4 $appBundle 2>&1) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or
+        $signatureDetails -notmatch 'Authority=Developer ID Application:') {
+        throw 'Replica.app does not carry the expected Developer ID Application authority.'
+    }
 }
 Assert-BundleContract -BundlePath $appBundle
 
@@ -162,6 +234,45 @@ if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $dmgPath -PathType Leaf)) {
 & hdiutil verify $dmgPath | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw 'DMG verification failed.'
+}
+
+if ($isDeveloperIdSigned) {
+    & codesign --force --timestamp --sign $SigningIdentity $dmgPath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Developer ID signing of the DMG failed.'
+    }
+    & codesign --verify --strict $dmgPath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The signed DMG failed code-signature verification.'
+    }
+}
+
+$isNotarized = ![string]::IsNullOrWhiteSpace($NotaryKeychainProfile)
+if ($isNotarized) {
+    $notaryArguments = @(
+        'notarytool', 'submit', $dmgPath,
+        '--keychain-profile', $NotaryKeychainProfile,
+        '--wait',
+        '--output-format', 'json')
+    if (![string]::IsNullOrWhiteSpace($NotaryKeychainPath)) {
+        $notaryArguments += @('--keychain', $NotaryKeychainPath)
+    }
+    $notaryJson = (& xcrun @notaryArguments) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Apple notarization submission failed.'
+    }
+    $notaryResult = $notaryJson | ConvertFrom-Json
+    if ($notaryResult.status -ne 'Accepted') {
+        throw "Apple notarization was not accepted. Status: $($notaryResult.status)"
+    }
+    & xcrun stapler staple $dmgPath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The notarization ticket could not be stapled to the DMG.'
+    }
+    & xcrun stapler validate $dmgPath
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The stapled notarization ticket failed validation.'
+    }
 }
 
 $mountPath = Join-Path $workRoot 'mounted-dmg'
@@ -204,4 +315,13 @@ if (!$resolvedOutput.StartsWith($workRootPrefix, [StringComparison]::Ordinal) -a
     Remove-Item -LiteralPath $workRoot -Recurse -Force
 }
 
-Write-Host "Created $dmgName ($hash). The app is ad-hoc signed and not notarized."
+$trustDescription = if ($isNotarized) {
+    'Developer ID signed and notarized'
+}
+elseif ($isDeveloperIdSigned) {
+    'Developer ID signed but not notarized'
+}
+else {
+    'ad-hoc signed and not notarized'
+}
+Write-Host "Created $dmgName ($hash). The package is $trustDescription."

@@ -43,9 +43,12 @@ public sealed partial class RollbackViewModel : ObservableObject
     private string _statusText = "최근 복원 세션을 불러오면 롤백 가능한 변경을 미리 볼 수 있습니다.";
 
     public bool CanApprove => _plan?.ReviewStatus == RollbackPlanReviewStatus.PendingReview &&
+        SelectedSession?.SessionId.Equals(_plan.SessionId, StringComparison.Ordinal) == true &&
         _plan.Items.Any(item => item.IsSelected);
 
-    public bool CanExecute => _plan?.ReviewStatus == RollbackPlanReviewStatus.Approved && !IsBusy;
+    public bool CanExecute => _plan?.ReviewStatus == RollbackPlanReviewStatus.Approved &&
+        SelectedSession?.SessionId.Equals(_plan.SessionId, StringComparison.Ordinal) == true &&
+        !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     private async Task RefreshSessionsAsync(CancellationToken cancellationToken)
@@ -106,6 +109,9 @@ public sealed partial class RollbackViewModel : ObservableObject
                 item.CanRollbackAutomatically ? "가능" : "수동 조치",
                 item.RequiresAdministrator ? "필요" : "불필요",
                 item.IsSelected ? "선택" : "미선택",
+                item.Target,
+                item.Effect,
+                item.ExpectedCurrentSha256 ?? string.Empty,
                 item.ManualInstruction ?? string.Empty)).ToArray();
             Results = [];
             StatusText = $"롤백 미리보기: 자동 {Items.Count(item => item.Selection == "선택"):N0}개, " +
@@ -224,6 +230,17 @@ public sealed partial class RollbackViewModel : ObservableObject
         ApproveRollbackCommand.NotifyCanExecuteChanged();
         ExecuteRollbackCommand.NotifyCanExecuteChanged();
     }
+
+    partial void OnSelectedSessionChanged(RollbackSessionRowViewModel? value)
+    {
+        _plan = null;
+        Items = [];
+        Results = [];
+        StatusText = value is null
+            ? "복원 기록을 선택하면 되돌릴 변경을 미리 볼 수 있습니다."
+            : "선택한 복원 기록의 되돌릴 내용을 미리 본 뒤 승인하세요.";
+        NotifyReviewStateChanged();
+    }
 }
 
 public sealed record RollbackSessionRowViewModel(
@@ -242,6 +259,9 @@ public sealed record RollbackItemRowViewModel(
     string Automatic,
     string Administrator,
     string Selection,
+    string Target,
+    string Effect,
+    string ExpectedCurrentSha256,
     string ManualInstruction);
 
 public sealed record RollbackResultRowViewModel(

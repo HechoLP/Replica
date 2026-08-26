@@ -34,7 +34,7 @@ The completed installer is renamed only after its streamed and reopened hashes a
 
 ## Installation handoff
 
-Before launch, Replica displays installer name, version, size, checksum state, and SHA-256, then asks again. The installer service verifies that the exact file remains beneath Replica's update Temp root, rejects reparse points, size changes, and hash changes, and launches only `ReplicaSetup.exe` with no arguments, no silent option, and no forced `runas` verb. Windows and the installer handle any later elevation request. After a successful interactive launch handoff, Replica closes its normal UI.
+Before launch, Replica displays installer name, version, size, checksum state, and SHA-256, then asks again. The installer service verifies that the exact file remains beneath Replica's update Temp root, rejects reparse points, size changes, and hash changes, and requires a Windows-trusted Authenticode signature matching a compile-time publisher-certificate SHA-256 allow-list while the file remains locked. A signed release build derives and embeds that allow-list from the exact protected certificate used to sign `Replica.exe` and setup; an unsigned local or prerelease build has no implicit publisher and therefore fails closed. After verification, Replica launches only `ReplicaSetup.exe` with no arguments, no silent option, and no forced `runas` verb; it closes only after a successful interactive launch handoff. Certificate rotation requires an explicitly reviewed build whose allow-list includes the intended old/new pins.
 
 Tests replace GitHub HTTP, Asset streams, timeouts, process launch, and application lifetime with fakes. They never call the live GitHub API, start an installer, or alter Windows.
 

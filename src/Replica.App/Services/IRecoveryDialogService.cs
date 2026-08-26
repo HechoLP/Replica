@@ -4,6 +4,8 @@ public interface IRecoveryDialogService
 {
     string? SelectRecoverySnapshot();
 
+    string? SelectOfflineInstallerExportFolder();
+
     char[]? RequestPassword(string title, string message);
 
     bool Confirm(string title, string message);

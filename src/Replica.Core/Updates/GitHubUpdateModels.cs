@@ -97,6 +97,7 @@ public enum UpdateDownloadErrorCode
     TimedOut,
     ChecksumInvalid,
     ChecksumMismatch,
+    SignatureInvalid,
     IoFailure,
 }
 

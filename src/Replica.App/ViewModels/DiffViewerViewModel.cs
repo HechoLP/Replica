@@ -94,7 +94,7 @@ public sealed partial class DiffViewerViewModel : ObservableObject
                 item.RequiresAdministrator ? "필요" : "불필요",
                 item.RequiresRestart ? "필요" : "불필요",
                 $"{item.SimilarityPercent}%",
-                item.ReasonCode,
+                ReasonCodePresenter.GetText(item.ReasonCode),
                 GetRecommendation(item),
                 item.Area,
                 item.Key)

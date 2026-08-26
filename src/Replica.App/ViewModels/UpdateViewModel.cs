@@ -153,9 +153,14 @@ public sealed partial class UpdateViewModel : ObservableObject
                 cancellationToken);
             ProgressPercentage = 100;
             ChecksumInformation = downloadedUpdate.ChecksumStatus == UpdateChecksumStatus.Verified
-                ? "SHA-256 검증 완료"
-                : "Checksum 없음 — 설치 전 계산된 Hash를 다시 확인합니다.";
-            StatusText = "ReplicaSetup.exe를 Temp 폴더에 안전하게 다운로드했습니다. 자동 실행하지 않았습니다.";
+                ? installers.IsAutomaticInstallAvailable
+                    ? "SHA-256 및 서명 정책 확인 준비 완료"
+                    : "SHA-256 검증 완료 · 서명된 배포 정책 미설정"
+                : "게시된 Checksum 없음 · 자동 설치 불가";
+            StatusText = installers.IsAutomaticInstallAvailable &&
+                downloadedUpdate.ChecksumStatus == UpdateChecksumStatus.Verified
+                ? "검증된 설치 파일을 다운로드했습니다. 실행 전 게시자 서명을 다시 확인합니다."
+                : "설치 파일을 다운로드했지만 서명된 배포 정책이 없어 Replica가 자동 실행하지 않습니다.";
             InstallCommand.NotifyCanExecuteChanged();
         });
     }
@@ -235,12 +240,23 @@ public sealed partial class UpdateViewModel : ObservableObject
         }
         catch (UpdateDownloadException exception)
         {
-            StatusText = $"업데이트 작업을 완료하지 못했습니다. ({exception.Code})";
+            StatusText = exception.Code switch
+            {
+                UpdateDownloadErrorCode.ApprovalRequired => "업데이트 다운로드 또는 실행 승인이 필요합니다.",
+                UpdateDownloadErrorCode.MissingAsset => "이 Release에 ReplicaSetup.exe가 없습니다.",
+                UpdateDownloadErrorCode.InvalidAsset => "설치 파일의 이름 또는 다운로드 주소가 안전 정책과 맞지 않습니다.",
+                UpdateDownloadErrorCode.TooLarge => "설치 파일이 허용된 최대 크기를 초과했습니다.",
+                UpdateDownloadErrorCode.TimedOut => "업데이트 다운로드 시간이 초과되었습니다. 네트워크를 확인하세요.",
+                UpdateDownloadErrorCode.ChecksumInvalid => "게시된 SHA-256 파일 형식이 올바르지 않습니다.",
+                UpdateDownloadErrorCode.ChecksumMismatch => "다운로드한 설치 파일의 SHA-256이 게시된 값과 다릅니다. 파일을 실행하지 않습니다.",
+                UpdateDownloadErrorCode.SignatureInvalid => "설치 파일 게시자 서명을 신뢰할 수 없어 실행하지 않습니다. Replica는 계속 실행됩니다.",
+                _ => "업데이트 파일을 안전하게 저장하거나 확인하지 못했습니다. Replica는 계속 실행됩니다.",
+            };
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException or HttpRequestException)
         {
-            StatusText = $"업데이트 작업을 완료하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "업데이트 작업을 완료하지 못했습니다. 네트워크와 다운로드 파일 상태를 확인하세요. Replica는 계속 실행됩니다.";
         }
         finally
         {
@@ -254,7 +270,9 @@ public sealed partial class UpdateViewModel : ObservableObject
 
     private bool CanSkip() => !IsBusy && updateAvailable && selectedRelease is not null;
 
-    private bool CanInstall() => !IsBusy && downloadedUpdate is not null;
+    private bool CanInstall() => !IsBusy &&
+        installers.IsAutomaticInstallAvailable &&
+        downloadedUpdate?.ChecksumStatus == UpdateChecksumStatus.Verified;
 
     private void ClearRelease()
     {

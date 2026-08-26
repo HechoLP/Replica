@@ -164,7 +164,7 @@ public sealed class MainViewModelTests
         await viewModel.CheckForUpdatesCommand.ExecuteAsync(null);
 
         Assert.Equal(1, updateService.CallCount);
-        Assert.Contains("준비 중", dialog.LastMessage, StringComparison.Ordinal);
+        Assert.Contains("확인하지 못했습니다", dialog.LastMessage, StringComparison.Ordinal);
     }
 
     private static MainViewModel CreateViewModel(
@@ -328,6 +328,8 @@ public sealed class MainViewModelTests
         public string? LastError { get; private set; }
 
         public string? SelectRecoverySnapshot() => "C:\\Fixture\\environment.replica";
+
+        public string? SelectOfflineInstallerExportFolder() => null;
 
         public char[]? RequestPassword(string title, string message) => null;
 

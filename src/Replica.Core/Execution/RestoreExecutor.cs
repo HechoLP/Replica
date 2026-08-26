@@ -83,6 +83,11 @@ public sealed class RestoreExecutor : IRestoreExecutor
                     total,
                     result.Message),
                 CancellationToken.None).ConfigureAwait(false);
+            if (result.ReasonCode == "RecoveryJournalFinalizationFailed")
+            {
+                AddSafetyStoppedRemainder(plan.Actions, index + 1, results, resultById);
+                break;
+            }
         }
 
         bool cancelled = results.Any(result => result.State == RestoreExecutionState.Cancelled);
@@ -100,6 +105,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
         IRestoreExecutionContext context,
         CancellationToken cancellationToken)
     {
+        bool journalPrepared = false;
         try
         {
             if (action.RequiresAdministrator && !context.IsElevated)
@@ -124,6 +130,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
                         action,
                         context.GetFileRestoreRequest(action.Id)),
                     cancellationToken).ConfigureAwait(false);
+                journalPrepared = true;
             }
 
             IRestoreActionHandler? handler = _handlers.FirstOrDefault(candidate =>
@@ -150,7 +157,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
                     "The action handler returned an invalid result.");
                 if (IsMutation(action.Type))
                 {
-                    await UpdateJournalStateAsync(context, action, mismatch, cancellationToken)
+                    return await FinalizeJournalOrFailAsync(context, action, mismatch)
                         .ConfigureAwait(false);
                 }
 
@@ -159,7 +166,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
 
             if (IsMutation(action.Type))
             {
-                await UpdateJournalStateAsync(context, action, result, cancellationToken)
+                return await FinalizeJournalOrFailAsync(context, action, result)
                     .ConfigureAwait(false);
             }
 
@@ -167,23 +174,52 @@ public sealed class RestoreExecutor : IRestoreExecutor
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Result(action, RestoreExecutionState.Cancelled, "ActionCancelled", "The action was cancelled.");
+            RestoreActionExecutionResult cancelled = Result(
+                action,
+                RestoreExecutionState.Cancelled,
+                "ActionCancelled",
+                "The action was cancelled.");
+            return journalPrepared
+                ? await FinalizeJournalOrFailAsync(context, action, cancelled).ConfigureAwait(false)
+                : cancelled;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            RestoreActionExecutionResult failed = Result(
+                action,
+                RestoreExecutionState.Failed,
+                "ActionExecutionFailed",
+                "The restore action failed without exposing system or payload details.");
+            return journalPrepared
+                ? await FinalizeJournalOrFailAsync(context, action, failed).ConfigureAwait(false)
+                : failed;
+        }
+    }
+
+    private static async Task<RestoreActionExecutionResult> FinalizeJournalOrFailAsync(
+        IRestoreExecutionContext context,
+        RestoreAction action,
+        RestoreActionExecutionResult result)
+    {
+        try
+        {
+            await UpdateJournalStateAsync(context, action, result).ConfigureAwait(false);
+            return result;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             return Result(
                 action,
                 RestoreExecutionState.Failed,
-                "ActionExecutionFailed",
-                "The restore action failed without exposing system or payload details.");
+                "RecoveryJournalFinalizationFailed",
+                "Replica stopped because the post-change recovery record could not be committed.");
         }
     }
 
     private static async Task UpdateJournalStateAsync(
         IRestoreExecutionContext context,
         RestoreAction action,
-        RestoreActionExecutionResult result,
-        CancellationToken cancellationToken)
+        RestoreActionExecutionResult result)
     {
         RollbackJournalState state = result.State switch
         {
@@ -199,7 +235,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
             action.Id,
             state,
             result.MutationTargetPath,
-            cancellationToken).ConfigureAwait(false);
+            CancellationToken.None).ConfigureAwait(false);
         if (state == RollbackJournalState.Applied)
         {
             await context.Journal.MarkActionStateAsync(
@@ -207,7 +243,7 @@ public sealed class RestoreExecutor : IRestoreExecutor
                 action.Id,
                 RollbackJournalState.Verified,
                 result.MutationTargetPath,
-                cancellationToken).ConfigureAwait(false);
+                CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -282,6 +318,25 @@ public sealed class RestoreExecutor : IRestoreExecutor
                 action.IsSelected ? RestoreExecutionState.Cancelled : RestoreExecutionState.Skipped,
                 action.IsSelected ? "ExecutionCancelled" : "ActionNotSelected",
                 action.IsSelected ? "Execution was cancelled before this action started." : "The action was not selected.");
+            results.Add(result);
+            resultById[action.Id] = result;
+        }
+    }
+
+    private static void AddSafetyStoppedRemainder(
+        IReadOnlyList<RestoreAction> actions,
+        int startIndex,
+        ICollection<RestoreActionExecutionResult> results,
+        IDictionary<string, RestoreActionExecutionResult> resultById)
+    {
+        for (int index = startIndex; index < actions.Count; index++)
+        {
+            RestoreAction action = actions[index];
+            RestoreActionExecutionResult result = Result(
+                action,
+                RestoreExecutionState.Skipped,
+                "JournalSafetyStop",
+                "Execution stopped before this action because a recovery record could not be committed.");
             results.Add(result);
             resultById[action.Id] = result;
         }

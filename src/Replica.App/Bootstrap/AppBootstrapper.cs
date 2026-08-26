@@ -20,6 +20,7 @@ using Replica.Infrastructure.Portable;
 using Replica.Infrastructure.Recovery;
 using Replica.Infrastructure.Restore;
 using Replica.Infrastructure.Scanning;
+using Replica.Infrastructure.Security;
 using Replica.Infrastructure.Snapshots;
 using Replica.Infrastructure.Updates;
 using Replica.Plugins.BuiltIn;
@@ -56,6 +57,8 @@ public static class AppBootstrapper
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<IUpdateDownloadService, GitHubUpdateDownloadService>();
         services.AddSingleton<IUpdateProcessLauncher, WindowsUpdateProcessLauncher>();
+        services.AddSingleton<IAuthenticodeTrustService, WindowsAuthenticodeTrustService>();
+        services.AddSingleton<IUpdateInstallerTrustVerifier, WindowsUpdateInstallerTrustVerifier>();
         services.AddSingleton<IUpdateInstallerService, UpdateInstallerService>();
         services.AddSingleton<IStorageVolumeProbe, WindowsStorageVolumeProbe>();
         services.AddSingleton<IPortableWriteProbe, PortableWriteProbe>();
@@ -67,6 +70,8 @@ public static class AppBootstrapper
         services.AddSingleton<IPreResetChecklistService, PreResetChecklistService>();
         services.AddSingleton<IReplicaInstallerDownloadService, ReplicaInstallerDownloadService>();
         services.AddSingleton<ISnapshotSelectionEstimator, SnapshotSelectionEstimator>();
+        services.AddSingleton<IOfflineInstallerInspectionService, WindowsOfflineInstallerInspectionService>();
+        services.AddSingleton<IOfflineInstallerExportService, OfflineInstallerExportService>();
         services.AddSingleton<ISnapshotReader, ReplicaSnapshotReader>();
         services.AddSingleton<ISnapshotComparisonService, SnapshotComparisonService>();
         services.AddSingleton<ISnapshotWriter, ReplicaSnapshotWriter>();
@@ -108,6 +113,7 @@ public static class AppBootstrapper
         services.AddSingleton<IRollbackService>(provider =>
             provider.GetRequiredService<RollbackJournalService>());
         services.AddSingleton<IRestoreProgressReporter, NullRestoreProgressReporter>();
+        services.AddSingleton<IElevatedActionConsentService, WpfElevatedActionConsentService>();
         services.AddSingleton<IElevatedPlanStore, ElevatedPlanStore>();
         services.AddSingleton<IElevatedProcessLauncher, ElevatedProcessLauncher>();
         services.AddSingleton<IElevationService, ElevationService>();

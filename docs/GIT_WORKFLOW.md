@@ -2,18 +2,18 @@
 
 ## Branches
 
-The protected default branch is `main`. Work begins from an up-to-date `main` and uses a focused name:
+Work begins from the repository's current protected default branch and uses a focused topic name. Do not assume the default branch is named `main`; use the branch displayed by GitHub for this repository.
 
 - `feat/<topic>` for product behavior;
 - `fix/<topic>` for defects;
 - `docs/<topic>` for documentation only;
 - `chore/<topic>` for tooling and repository maintenance.
 
-Do not commit directly to `main` or rewrite published history. Avoid long-lived integration branches.
+Do not commit directly to the protected default branch or rewrite published history. Avoid long-lived integration branches.
 
 ## Local workflow
 
-1. `git switch main`
+1. `git switch <default-branch>`
 2. `git pull --ff-only`
 3. `git switch -c <type>/<topic>`
 4. Make one coherent change and run relevant verification.
@@ -36,4 +36,4 @@ Required checks are formatting, Release build, tests, and any task-specific secu
 
 ## Merge and cleanup
 
-Use squash merge so the default branch has one intentional commit per PR. The squash title follows the repository's commit convention. Delete the remote topic branch, switch to `main`, and update with `git pull --ff-only`. Tags are created only by the release process, never on a topic branch.
+Use squash merge so the default branch has one intentional commit per PR. The squash title follows the repository's commit convention. Delete the remote topic branch, switch to the current default branch, and update with `git pull --ff-only`. Tags are created only by the release process, never on a topic branch.

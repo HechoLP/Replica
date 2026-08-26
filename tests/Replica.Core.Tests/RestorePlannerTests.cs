@@ -302,6 +302,27 @@ public sealed class RestorePlannerTests
     }
 
     [Fact]
+    public void CreatePlan_AlwaysKeepsPackageManagerActionsUnelevated()
+    {
+        RestorePlan plan = _planner.CreatePlan(Diff(
+            DiffRestoreMode.Recommended,
+            Item(
+                DiffType.Missing,
+                DiffArea.Applications,
+                "Example.Editor",
+                automatic: true,
+                administrator: true)));
+
+        RestoreAction install = Find(
+            plan.Actions,
+            "Example.Editor",
+            RestoreActionType.InstallPackage);
+
+        Assert.False(install.RequiresAdministrator);
+        Assert.Equal(0, plan.DryRun.AdministratorActionCount);
+    }
+
+    [Fact]
     public void CreatePlan_DryRunIsDeterministicForShuffledInputAndHints()
     {
         DiffItem app = Item(DiffType.Missing, DiffArea.Applications, "Git.Git", automatic: true);

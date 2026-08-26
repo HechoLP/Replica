@@ -6,8 +6,8 @@
         Title="Replica"
         Width="1440"
         Height="900"
-        MinWidth="1280"
-        MinHeight="720"
+        MinWidth="1024"
+        MinHeight="680"
         AutomationProperties.Name="Replica Windows 환경 마이그레이션 및 복구"
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource PrimaryTextBrush}"
@@ -19,15 +19,14 @@
         <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Home}" />
         <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Scan}" />
         <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.SnapshotBuilder}" />
-        <KeyBinding Key="D4" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.DiffViewer}" />
-        <KeyBinding Key="D5" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.RestorePlan}" />
-        <KeyBinding Key="D6" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.RecoveryWizard}" />
+        <KeyBinding Key="D4" Modifiers="Control" Command="{Binding OpenSnapshotCommand}" />
+        <KeyBinding Key="D5" Modifiers="Control" Command="{Binding RestoreAfterResetCommand}" />
         <KeyBinding Key="Comma" Modifiers="Control" Command="{Binding ShowSettingsCommand}" />
     </Window.InputBindings>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="238" />
+            <ColumnDefinition Width="220" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Border Grid.Column="0" Background="{DynamicResource NavigationBackgroundBrush}">
@@ -55,16 +54,12 @@
                 </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Margin="22,8,0,5" Foreground="{DynamicResource NavigationTextBrush}" FontSize="11" Text="작업" />
+                        <TextBlock Margin="22,8,0,5" Foreground="{DynamicResource NavigationTextBrush}" FontSize="11" Text="시작" />
                         <Button AutomationProperties.Name="홈, Ctrl+1" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Home}" Content="{DynamicResource NavHome}" Style="{DynamicResource ShellNavigationButtonStyle}" />
                         <Button AutomationProperties.Name="현재 PC 스캔, Ctrl+2" Command="{Binding ScanCurrentComputerCommand}" Content="{DynamicResource NavScan}" Style="{DynamicResource ShellNavigationButtonStyle}" />
                         <Button AutomationProperties.Name="Snapshot Builder, Ctrl+3" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.SnapshotBuilder}" Content="{DynamicResource NavSnapshotBuilder}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="Comparison" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Comparison}" Content="{DynamicResource NavComparison}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="Diff Viewer, Ctrl+4" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.DiffViewer}" Content="{DynamicResource NavDiffViewer}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="Restore Plan, Ctrl+5" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.RestorePlan}" Content="{DynamicResource NavRestorePlan}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="초기화 후 복구, Ctrl+6" Command="{Binding RestoreAfterResetCommand}" Content="{DynamicResource NavRecovery}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="복원 실행" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Execution}" Content="{DynamicResource NavExecution}" Style="{DynamicResource ShellNavigationButtonStyle}" />
-                        <Button AutomationProperties.Name="복원 결과" Command="{Binding NavigateCommand}" CommandParameter="{x:Static nav:NavigationDestination.Result}" Content="{DynamicResource NavResult}" Style="{DynamicResource ShellNavigationButtonStyle}" />
+                        <Button AutomationProperties.Name="Snapshot 열어 비교 및 복원, Ctrl+4" Command="{Binding OpenSnapshotCommand}" Content="Snapshot 열어 비교·복원" Style="{DynamicResource ShellNavigationButtonStyle}" />
+                        <Button AutomationProperties.Name="초기화 후 복구, Ctrl+5" Command="{Binding RestoreAfterResetCommand}" Content="{DynamicResource NavRecovery}" Style="{DynamicResource ShellNavigationButtonStyle}" />
                         <TextBlock Margin="22,18,0,5" Foreground="{DynamicResource NavigationTextBrush}" FontSize="11" Text="관리" />
                         <Button AutomationProperties.Name="Snapshot 및 복원 기록" Command="{Binding ShowSnapshotHistoryCommand}" Content="{DynamicResource NavHistory}" Style="{DynamicResource ShellNavigationButtonStyle}" />
                         <Button AutomationProperties.Name="업데이트 확인" Command="{Binding CheckForUpdatesCommand}" Content="{DynamicResource NavUpdate}" Style="{DynamicResource ShellNavigationButtonStyle}" />

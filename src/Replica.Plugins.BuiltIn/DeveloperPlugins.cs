@@ -7,6 +7,20 @@ namespace Replica.Plugins.BuiltIn;
 
 public sealed class VisualStudioCodePlugin : BuiltInDeveloperPluginBase
 {
+    private static readonly IReadOnlyDictionary<string, Func<JsonElement, bool>> SupportedSettings =
+        new Dictionary<string, Func<JsonElement, bool>>(StringComparer.Ordinal)
+        {
+            ["editor.fontSize"] = value => IsJsonIntegerInRange(value, 6, 100),
+            ["editor.tabSize"] = value => IsJsonIntegerInRange(value, 1, 32),
+            ["editor.insertSpaces"] = IsJsonBoolean,
+            ["editor.minimap.enabled"] = IsJsonBoolean,
+            ["files.autoSaveDelay"] = value => IsJsonIntegerInRange(value, 0, 600_000),
+            ["window.zoomLevel"] = value => IsJsonIntegerInRange(value, -20, 20),
+            ["workbench.colorTheme"] = IsSafePreferenceToken,
+            ["workbench.iconTheme"] = IsSafePreferenceToken,
+            ["terminal.integrated.defaultProfile.windows"] = IsSafePreferenceToken,
+        };
+
     public override string Id => "replica.developer.vscode";
 
     public override string DisplayName => "Visual Studio Code";
@@ -56,38 +70,20 @@ public sealed class VisualStudioCodePlugin : BuiltInDeveloperPluginBase
         PluginCaptureContext context,
         CancellationToken cancellationToken)
     {
-        const int maximumCapturedFiles = 500;
-        const int maximumCapturedCharacters = 8 * 1024 * 1024;
         string userData = Path.Combine(
             context.Host.GetKnownPath(DeveloperKnownPath.RoamingApplicationData),
             "Code",
             "User");
         List<PluginCapturedFile> files = [];
-        int capturedCharacters = 0;
-        await AddFileAsync("settings.json", sanitize: true).ConfigureAwait(false);
-        await AddFileAsync("keybindings.json", sanitize: true).ConfigureAwait(false);
-        await AddFileAsync("tasks.json", sanitize: true).ConfigureAwait(false);
-
-        string snippets = Path.Combine(userData, "snippets");
-        foreach (string file in context.Host.EnumerateFiles(snippets, "*", recursive: true))
+        PluginCapturedFile? settings = await CaptureProjectedJsonFileAsync(
+            context.Host,
+            Path.Combine(userData, "settings.json"),
+            "settings.json",
+            SupportedSettings,
+            cancellationToken).ConfigureAwait(false);
+        if (settings is not null)
         {
-            string relative = Path.GetRelativePath(snippets, file);
-            if (!relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
-                !relative.EndsWith(".code-snippets", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            PluginCapturedFile? captured = await CaptureFileAsync(
-                context.Host,
-                file,
-                Path.Combine("snippets", relative),
-                sanitizeJson: true,
-                cancellationToken).ConfigureAwait(false);
-            if (captured is not null)
-            {
-                TryAdd(captured);
-            }
+            files.Add(settings);
         }
 
         DeveloperToolQueryResult version = await context.Host.QueryAsync(
@@ -111,32 +107,6 @@ public sealed class VisualStudioCodePlugin : BuiltInDeveloperPluginBase
             context,
             cancellationToken).ConfigureAwait(false);
         return Snapshot(values, files, exclusions, Warnings(version, extensions));
-
-        async Task AddFileAsync(string fileName, bool sanitize)
-        {
-            PluginCapturedFile? captured = await CaptureFileAsync(
-                context.Host,
-                Path.Combine(userData, fileName),
-                fileName,
-                sanitize,
-                cancellationToken).ConfigureAwait(false);
-            if (captured is not null)
-            {
-                TryAdd(captured);
-            }
-        }
-
-        void TryAdd(PluginCapturedFile captured)
-        {
-            if (files.Count >= maximumCapturedFiles ||
-                capturedCharacters + captured.Content.Length > maximumCapturedCharacters)
-            {
-                return;
-            }
-
-            files.Add(captured);
-            capturedCharacters += captured.Content.Length;
-        }
     }
 
     public override Task<IReadOnlyList<PluginSensitiveExclusion>> GetSensitiveExclusionsAsync(
@@ -149,6 +119,10 @@ public sealed class VisualStudioCodePlugin : BuiltInDeveloperPluginBase
             Exclusion("User/globalStorage", "VSCodeAuthentication", "Login and extension authentication state is excluded."),
             Exclusion("User/workspaceStorage", "WorkspaceSensitiveData", "Workspace storage may contain credentials and private history."),
             Exclusion("User/History", "EditorHistory", "Editor history is never captured."),
+            Exclusion("User/keybindings.json", "ArbitraryCode", "Keybinding commands and arguments are not captured."),
+            Exclusion("User/tasks.json", "ArbitraryCode", "Task commands and arguments are not captured."),
+            Exclusion("User/snippets", "ArbitraryCode", "Snippet bodies may contain credentials and are inventory-only, not captured."),
+            Exclusion("unrecognized settings.json keys", "UnknownSchema", "Only explicitly supported preference keys and value types are captured."),
             Exclusion("Cache", "Cache", "VS Code caches are never captured."),
             Exclusion("GitHub authentication", "Credential", "GitHub and Remote Tunnel credentials are never captured."),
         ]);
@@ -220,8 +194,7 @@ public sealed class GitPlugin : BuiltInDeveloperPluginBase
             key.Equals("user.email", StringComparison.OrdinalIgnoreCase) ||
             key.Equals("init.defaultbranch", StringComparison.OrdinalIgnoreCase) ||
             key.Equals("core.editor", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("credential.helper", StringComparison.OrdinalIgnoreCase) ||
-            key.StartsWith("alias.", StringComparison.OrdinalIgnoreCase);
+            key.Equals("credential.helper", StringComparison.OrdinalIgnoreCase);
     }
 }
 
@@ -237,23 +210,6 @@ public sealed class PowerShellPlugin : BuiltInDeveloperPluginBase
         PluginCaptureContext context,
         CancellationToken cancellationToken)
     {
-        List<PluginCapturedFile> files = [];
-        string documents = context.Host.GetKnownPath(DeveloperKnownPath.Documents);
-        foreach (string folder in new[] { "PowerShell", "WindowsPowerShell" })
-        {
-            string path = Path.Combine(documents, folder, "Microsoft.PowerShell_profile.ps1");
-            PluginCapturedFile? profile = await CaptureFileAsync(
-                context.Host,
-                path,
-                $"profiles/{folder}/Microsoft.PowerShell_profile.ps1",
-                sanitizeJson: false,
-                cancellationToken).ConfigureAwait(false);
-            if (profile is not null)
-            {
-                files.Add(profile with { Content = SanitizeTextContent(profile.Content) });
-            }
-        }
-
         DeveloperToolQueryResult version = await context.Host.QueryAsync(
             DeveloperToolQuery.PowerShellVersion,
             cancellationToken).ConfigureAwait(false);
@@ -270,7 +226,7 @@ public sealed class PowerShellPlugin : BuiltInDeveloperPluginBase
         IReadOnlyList<PluginSensitiveExclusion> exclusions = await GetSensitiveExclusionsAsync(
             context,
             cancellationToken).ConfigureAwait(false);
-        return Snapshot(values, files, exclusions, Warnings(version, modules));
+        return Snapshot(values, [], exclusions, Warnings(version, modules));
     }
 
     public override Task<IReadOnlyList<PluginSensitiveExclusion>> GetSensitiveExclusionsAsync(
@@ -282,13 +238,26 @@ public sealed class PowerShellPlugin : BuiltInDeveloperPluginBase
         [
             Exclusion("repository registration", "UntrustedRepository", "Restore never registers an untrusted repository."),
             Exclusion("ExecutionPolicy", "ExecutionPolicy", "Restore never changes PowerShell execution policy."),
-            Exclusion("secrets in profile", "UserReviewRequired", "Profile content is user-selected configuration and must be reviewed before restore."),
+            Exclusion("PowerShell profiles", "ArbitraryCode", "Profile script bodies may contain credentials or executable code and are never captured."),
         ]);
     }
 }
 
 public sealed class WindowsTerminalPlugin : BuiltInDeveloperPluginBase
 {
+    private static readonly IReadOnlyDictionary<string, Func<JsonElement, bool>> SupportedSettings =
+        new Dictionary<string, Func<JsonElement, bool>>(StringComparer.Ordinal)
+        {
+            ["defaultProfile"] = IsJsonGuid,
+            ["copyOnSelect"] = IsJsonBoolean,
+            ["trimBlockSelection"] = IsJsonBoolean,
+            ["snapToGridOnResize"] = IsJsonBoolean,
+            ["alwaysShowTabs"] = IsJsonBoolean,
+            ["showTabsInTitlebar"] = IsJsonBoolean,
+            ["confirmCloseAllTabs"] = IsJsonBoolean,
+            ["theme"] = IsSafePreferenceToken,
+        };
+
     public override string Id => "replica.developer.windows-terminal";
 
     public override string DisplayName => "Windows Terminal";
@@ -313,16 +282,20 @@ public sealed class WindowsTerminalPlugin : BuiltInDeveloperPluginBase
         string? settingsPath = FindSettings(context.Host);
         if (settingsPath is not null)
         {
-            PluginCapturedFile? settings = await CaptureFileAsync(
-                context.Host,
-                settingsPath,
-                "settings.json",
-                sanitizeJson: true,
-                cancellationToken).ConfigureAwait(false);
-            if (settings is not null)
+            string? content = await context.Host.ReadTextFileAsync(settingsPath, cancellationToken)
+                .ConfigureAwait(false);
+            if (content is not null)
             {
-                files.Add(settings);
-                AnalyzeTerminalSettings(settings.Content, context.Host, warnings);
+                AnalyzeTerminalSettings(content, context.Host, warnings);
+                string? projected = ProjectAllowListedJson(content, SupportedSettings);
+                if (projected is null)
+                {
+                    warnings.Add("Windows Terminal settings could not be projected safely.");
+                }
+                else
+                {
+                    files.Add(new PluginCapturedFile("settings.json", projected, "application/json"));
+                }
             }
         }
 
@@ -344,7 +317,8 @@ public sealed class WindowsTerminalPlugin : BuiltInDeveloperPluginBase
         return Task.FromResult<IReadOnlyList<PluginSensitiveExclusion>>(
         [
             Exclusion("state and cache", "Cache", "Terminal runtime state and cache are not captured."),
-            Exclusion("credential-like JSON properties", "Credential", "Sensitive JSON properties are removed recursively."),
+            Exclusion("profiles, actions, and color schemes", "ArbitraryCommand", "Command lines and open-ended profile content are reviewed manually and are not captured."),
+            Exclusion("unrecognized settings.json keys", "UnknownSchema", "Only explicitly supported preference keys and value types are captured."),
         ]);
     }
 

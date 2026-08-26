@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -8,6 +9,10 @@ namespace Replica.Infrastructure.Snapshots;
 
 public sealed class ReplicaSnapshotReader : ISnapshotReader
 {
+    private const int EndOfCentralDirectoryMinimumSize = 22;
+    private const int MaximumZipCommentSize = ushort.MaxValue;
+    private const long MaximumCentralDirectorySize = 64L * 1024 * 1024;
+    private const long MaximumArchiveOverhead = 128L * 1024 * 1024;
     private readonly ReplicaSnapshotReadLimits limits;
 
     public ReplicaSnapshotReader()
@@ -50,6 +55,8 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
                 FileShare.Read,
                 128 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
+            ValidateZipStructurePreflight(archiveStream);
+            archiveStream.Position = 0;
             using ZipArchive archive = new(archiveStream, ZipArchiveMode.Read, leaveOpen: false);
             IReadOnlyDictionary<string, ZipArchiveEntry> entries = await Task.Run(
                 () => InspectArchive(archive),
@@ -194,6 +201,151 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
         }
     }
 
+    private void ValidateZipStructurePreflight(FileStream archiveStream)
+    {
+        long maximumPhysicalSize = checked(
+            limits.MaximumTotalUncompressedSize + MaximumArchiveOverhead);
+        if (archiveStream.Length < EndOfCentralDirectoryMinimumSize ||
+            archiveStream.Length > maximumPhysicalSize)
+        {
+            throw new ReplicaSnapshotException(
+                "The snapshot archive size exceeds the configured limit.");
+        }
+
+        int tailLength = (int)Math.Min(
+            archiveStream.Length,
+            EndOfCentralDirectoryMinimumSize + MaximumZipCommentSize);
+        byte[] tail = new byte[tailLength];
+        archiveStream.Position = archiveStream.Length - tailLength;
+        archiveStream.ReadExactly(tail);
+
+        int endRecordOffset = FindEndOfCentralDirectory(tail);
+        if (endRecordOffset < 0)
+        {
+            throw new ReplicaSnapshotException(
+                "The snapshot ZIP end record is missing or malformed.");
+        }
+
+        ReadOnlySpan<byte> endRecord = tail.AsSpan(endRecordOffset);
+        ushort diskNumber = BinaryPrimitives.ReadUInt16LittleEndian(endRecord[4..]);
+        ushort centralDirectoryDisk = BinaryPrimitives.ReadUInt16LittleEndian(endRecord[6..]);
+        ulong entriesOnDisk = BinaryPrimitives.ReadUInt16LittleEndian(endRecord[8..]);
+        ulong totalEntries = BinaryPrimitives.ReadUInt16LittleEndian(endRecord[10..]);
+        ulong centralDirectorySize = BinaryPrimitives.ReadUInt32LittleEndian(endRecord[12..]);
+        ulong centralDirectoryOffset = BinaryPrimitives.ReadUInt32LittleEndian(endRecord[16..]);
+        bool requiresZip64 = entriesOnDisk == ushort.MaxValue ||
+            totalEntries == ushort.MaxValue ||
+            centralDirectorySize == uint.MaxValue ||
+            centralDirectoryOffset == uint.MaxValue;
+
+        long absoluteEndRecordOffset = archiveStream.Length - tailLength + endRecordOffset;
+        if (requiresZip64)
+        {
+            (diskNumber,
+                centralDirectoryDisk,
+                entriesOnDisk,
+                totalEntries,
+                centralDirectorySize,
+                centralDirectoryOffset) = ReadZip64DirectoryFacts(
+                archiveStream,
+                absoluteEndRecordOffset);
+        }
+
+        if (diskNumber != 0 ||
+            centralDirectoryDisk != 0 ||
+            entriesOnDisk != totalEntries ||
+            totalEntries == 0 ||
+            totalEntries > (ulong)limits.MaximumEntryCount ||
+            centralDirectorySize == 0 ||
+            centralDirectorySize > MaximumCentralDirectorySize ||
+            centralDirectoryOffset > (ulong)archiveStream.Length ||
+            centralDirectorySize > (ulong)archiveStream.Length - centralDirectoryOffset ||
+            centralDirectoryOffset + centralDirectorySize > (ulong)absoluteEndRecordOffset)
+        {
+            throw new ReplicaSnapshotException(
+                "The snapshot ZIP central directory exceeds the configured limits.");
+        }
+    }
+
+    private static int FindEndOfCentralDirectory(ReadOnlySpan<byte> tail)
+    {
+        const uint signature = 0x06054B50;
+        for (int offset = tail.Length - EndOfCentralDirectoryMinimumSize; offset >= 0; offset--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(tail[offset..]) != signature)
+            {
+                continue;
+            }
+
+            ushort commentLength = BinaryPrimitives.ReadUInt16LittleEndian(tail[(offset + 20)..]);
+            if (offset + EndOfCentralDirectoryMinimumSize + commentLength == tail.Length)
+            {
+                return offset;
+            }
+        }
+
+        return -1;
+    }
+
+    private static (ushort DiskNumber,
+        ushort CentralDirectoryDisk,
+        ulong EntriesOnDisk,
+        ulong TotalEntries,
+        ulong CentralDirectorySize,
+        ulong CentralDirectoryOffset) ReadZip64DirectoryFacts(
+        FileStream archiveStream,
+        long absoluteEndRecordOffset)
+    {
+        const uint locatorSignature = 0x07064B50;
+        const uint endRecordSignature = 0x06064B50;
+        const int locatorSize = 20;
+        const int minimumEndRecordSize = 56;
+        if (absoluteEndRecordOffset < locatorSize)
+        {
+            throw new ReplicaSnapshotException("The snapshot ZIP64 locator is missing.");
+        }
+
+        Span<byte> locator = stackalloc byte[locatorSize];
+        archiveStream.Position = absoluteEndRecordOffset - locatorSize;
+        archiveStream.ReadExactly(locator);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(locator) != locatorSignature ||
+            BinaryPrimitives.ReadUInt32LittleEndian(locator[4..]) != 0 ||
+            BinaryPrimitives.ReadUInt32LittleEndian(locator[16..]) != 1)
+        {
+            throw new ReplicaSnapshotException("The snapshot ZIP64 locator is invalid.");
+        }
+
+        ulong zip64RecordOffset = BinaryPrimitives.ReadUInt64LittleEndian(locator[8..]);
+        if (zip64RecordOffset > (ulong)archiveStream.Length - minimumEndRecordSize)
+        {
+            throw new ReplicaSnapshotException("The snapshot ZIP64 end record is invalid.");
+        }
+
+        Span<byte> endRecord = stackalloc byte[minimumEndRecordSize];
+        archiveStream.Position = (long)zip64RecordOffset;
+        archiveStream.ReadExactly(endRecord);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(endRecord) != endRecordSignature ||
+            BinaryPrimitives.ReadUInt64LittleEndian(endRecord[4..]) < 44)
+        {
+            throw new ReplicaSnapshotException("The snapshot ZIP64 end record is invalid.");
+        }
+
+        uint diskNumber = BinaryPrimitives.ReadUInt32LittleEndian(endRecord[16..]);
+        uint centralDirectoryDisk = BinaryPrimitives.ReadUInt32LittleEndian(endRecord[20..]);
+        if (diskNumber > ushort.MaxValue || centralDirectoryDisk > ushort.MaxValue)
+        {
+            throw new ReplicaSnapshotException("Multi-disk snapshots are not supported.");
+        }
+
+        return (
+            (ushort)diskNumber,
+            (ushort)centralDirectoryDisk,
+            BinaryPrimitives.ReadUInt64LittleEndian(endRecord[24..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(endRecord[32..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(endRecord[40..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(endRecord[48..]));
+    }
+
     private void ValidateSnapshotFile(string snapshotPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
@@ -309,6 +461,10 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
             manifest.Metadata.Machine.Windows is null ||
             manifest.Metadata.Machine.Windows.Capabilities is null ||
             manifest.Metadata.Artifacts is null ||
+            manifest.Metadata.Artifacts
+                .Where(artifact => artifact is not null)
+                .Select(artifact => artifact.ArchivePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != manifest.Metadata.Artifacts.Count ||
             manifest.Metadata.Artifacts.Any(artifact =>
                 artifact is null ||
                 string.IsNullOrWhiteSpace(artifact.ArchivePath) ||
@@ -467,9 +623,16 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
     {
         if (recovery.SelectedFolders is null ||
             recovery.OfflineInstallers is null ||
+            recovery.OfflineInstallers.Count > 100 ||
             recovery.SelectedFolders.Any(folder => folder is null || !Enum.IsDefined(folder.Category)) ||
             recovery.OfflineInstallers.Any(installer =>
-                installer is null || string.IsNullOrWhiteSpace(installer.Provenance)) ||
+                installer is null ||
+                string.IsNullOrWhiteSpace(installer.Provenance) ||
+                !HasValidOptionalInstallerIdentity(installer)) ||
+            recovery.OfflineInstallers
+                .Where(installer => installer is not null)
+                .Select(installer => installer.ArchivePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != recovery.OfflineInstallers.Count ||
             !manifest.Exclusions.SequenceEqual(exclusions) ||
             !WindowsInfoMatches(windows, manifest.Metadata.Machine.Windows))
         {
@@ -509,6 +672,60 @@ public sealed class ReplicaSnapshotReader : ISnapshotReader
             {
                 throw new ReplicaSnapshotException("Snapshot artifact metadata is invalid.");
             }
+        }
+
+        foreach (ReplicaOfflineInstaller installer in recovery.OfflineInstallers)
+        {
+            if (installer.ExpectedSha256 is null)
+            {
+                continue;
+            }
+
+            string archivePath = SnapshotPathValidator.BuildInstallerEntryPath(installer.ArchivePath);
+            ReplicaArtifact? artifact = manifest.Metadata.Artifacts.SingleOrDefault(candidate =>
+                string.Equals(candidate.ArchivePath, archivePath, StringComparison.Ordinal));
+            if (artifact is null ||
+                installer.ExpectedSize != artifact.Size ||
+                !string.Equals(installer.ExpectedSha256, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ReplicaSnapshotException(
+                    "Offline installer review metadata does not match the archived payload.");
+            }
+        }
+    }
+
+    private static bool HasValidOptionalInstallerIdentity(ReplicaOfflineInstaller installer)
+    {
+        bool hasAnyIdentity = installer.Publisher is not null ||
+            installer.PublisherCertificateSha256 is not null ||
+            installer.ExpectedSha256 is not null ||
+            installer.ExpectedSize is not null;
+        if (!hasAnyIdentity)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(installer.Publisher) &&
+            IsSha256(installer.PublisherCertificateSha256) &&
+            IsSha256(installer.ExpectedSha256) &&
+            installer.ExpectedSize is > 0 and <= 2L * 1024 * 1024 * 1024;
+    }
+
+    private static bool IsSha256(string? value)
+    {
+        if (value?.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = Convert.FromHexString(value);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
         }
     }
 

@@ -9,14 +9,10 @@ namespace Replica.App.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly IAppLanguageService languages;
     private readonly IPortableSnapshotDialogService dialogs;
     private readonly IPortableSnapshotSettingsService portableSettings;
     private readonly IThemeService themes;
     private readonly IUpdatePreferenceService updates;
-
-    [ObservableProperty]
-    private LanguageOptionViewModel? _selectedLanguage;
 
     [ObservableProperty]
     private ThemeMode _selectedTheme = ThemeMode.Light;
@@ -25,16 +21,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private string _defaultSnapshotDirectory = string.Empty;
 
     [ObservableProperty]
-    private int _logRetentionDays = 14;
-
-    [ObservableProperty]
     private UpdateChannel _updateChannel = UpdateChannel.Stable;
-
-    [ObservableProperty]
-    private bool _privacyModeEnabled = true;
-
-    [ObservableProperty]
-    private bool _showAdvancedSettings;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(LoadCommand))]
@@ -47,27 +34,17 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public SettingsViewModel(
         IThemeService themes,
-        IAppLanguageService languages,
         IPortableSnapshotSettingsService portableSettings,
         IUpdatePreferenceService updates,
         IPortableSnapshotDialogService dialogs)
     {
         this.themes = themes;
-        this.languages = languages;
         this.portableSettings = portableSettings;
         this.updates = updates;
         this.dialogs = dialogs;
-        Languages =
-        [
-            new("ko-KR", "한국어"),
-            new("en-US", "English"),
-        ];
-        SelectedLanguage = Languages[0];
         Themes = Enum.GetValues<ThemeMode>();
         UpdateChannels = Enum.GetValues<UpdateChannel>();
     }
-
-    public IReadOnlyList<LanguageOptionViewModel> Languages { get; }
 
     public IReadOnlyList<ThemeMode> Themes { get; }
 
@@ -83,8 +60,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             DefaultSnapshotDirectory = portable.DefaultSnapshotDirectory ?? string.Empty;
             UpdateChannel = update.Channel;
             SelectedTheme = themes.CurrentTheme;
-            SelectedLanguage = Languages.First(option =>
-                option.Code.Equals(languages.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase));
             StatusText = "설정을 불러왔습니다.";
         });
     }
@@ -102,12 +77,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (SelectedLanguage is null || LogRetentionDays is < 1 or > 365)
-        {
-            StatusText = "로그 보존 기간은 1~365일이어야 합니다.";
-            return;
-        }
-
         await RunAsync(async () =>
         {
             if (!string.IsNullOrWhiteSpace(DefaultSnapshotDirectory))
@@ -122,8 +91,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 new UpdatePreference(UpdateChannel, current.SkippedVersionTag),
                 cancellationToken);
             themes.ApplyTheme(SelectedTheme);
-            languages.ApplyLanguage(SelectedLanguage.Code);
-            StatusText = "설정을 저장하고 Theme·언어·업데이트 Channel을 적용했습니다.";
+            StatusText = "기본 폴더·Theme·업데이트 채널을 저장하고 적용했습니다. 현재 표시 언어는 한국어입니다.";
         });
     }
 
@@ -140,7 +108,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText = $"설정을 처리하지 못했습니다. ({exception.GetType().Name})";
+            StatusText = "설정을 저장하지 못했습니다. 선택한 폴더가 존재하고 접근 가능한지 확인하세요. 기존 설정은 유지됩니다.";
         }
         finally
         {
@@ -150,5 +118,3 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private bool CanRun() => !IsBusy;
 }
-
-public sealed record LanguageOptionViewModel(string Code, string DisplayName);
