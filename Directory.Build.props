@@ -10,7 +10,7 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <VersionPrefix>0.2.0</VersionPrefix>
-    <VersionSuffix>alpha.1</VersionSuffix>
+    <VersionSuffix>alpha.2</VersionSuffix>
     <Authors>HechoLP</Authors>
     <Product>Replica</Product>
     <RepositoryUrl>https://github.com/HechoLP/Replica</RepositoryUrl>
