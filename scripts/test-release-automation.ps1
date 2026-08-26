@@ -104,7 +104,7 @@ try {
     foreach ($contract in $releaseContracts.GetEnumerator()) {
         $content = $contract.Value[0]
         foreach ($marker in $contract.Value[1..($contract.Value.Count - 1)]) {
-            if (!$content.Contains($marker, [StringComparison]::Ordinal)) {
+            if ($content.IndexOf($marker, [StringComparison]::Ordinal) -lt 0) {
                 throw "Release contract '$($contract.Key)' is missing '$marker'."
             }
         }
