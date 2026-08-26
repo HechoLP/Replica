@@ -4,7 +4,7 @@ All notable changes to Replica are documented in this file. The project follows 
 
 ## [Unreleased]
 
-## [0.2.0-alpha.2] - 2026-08-26
+## [0.2.0-alpha.3] - 2026-08-26
 
 ### Added
 
@@ -29,6 +29,7 @@ All notable changes to Replica are documented in this file. The project follows 
 - Restore planning now stops when a required current-PC inventory stage is incomplete, rejects rewritten sensitive environment entries, and invalidates stale approvals whenever the Snapshot or Diff selection changes.
 - Hostile archives, private staging, elevated execution, rollback journaling, installer/update trust, and built-in plugin privacy boundaries were hardened and regression-tested.
 - Release jobs authenticate prepared artifacts and packaging tools before protected signing material is exposed.
+- Windows release scripts now use APIs and UTF-8 environment-file writes compatible with the hosted runner's Windows PowerShell 5.1.
 
 ### Known issues
 

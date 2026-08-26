@@ -128,13 +128,13 @@ dotnet test Replica.sln -c Release --no-build
 Building an installer additionally requires Inno Setup 6:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.2.0-alpha.2
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Version 0.2.0-alpha.3
 ```
 
 On macOS, build either architecture with:
 
 ```powershell
-pwsh ./scripts/build-macos-release.ps1 -Version 0.2.0-alpha.2 -Architecture arm64
+pwsh ./scripts/build-macos-release.ps1 -Version 0.2.0-alpha.3 -Architecture arm64
 ```
 
 Do not run the opt-in installer smoke test outside a clean Windows test account or disposable VM. Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), and the [Git workflow](docs/GIT_WORKFLOW.md) before changing the repository.
